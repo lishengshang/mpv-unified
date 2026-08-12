@@ -50,7 +50,7 @@ fn pending_git_install_clones_and_applies_whitelist() {
         "local foo = true\n"
     );
     assert_eq!(
-        read_string(&root.join("scripts/sub/baz.lua")),
+        read_string(&root.join("scripts/sub/baz.lua")).replace("\r\n", "\n"),
         "local baz = true\n"
     );
     assert!(!root.join("scripts/bar.txt").exists());

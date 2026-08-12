@@ -156,16 +156,16 @@ pub fn install(opts: &InstallOptions) -> Result<InstallOutcome> {
     let config_written = match outcome {
         Ok(config_written) => config_written,
         Err(error) => {
-            if source_kind == SourceKind::PendingGit {
-                let _ = fs::remove_dir_all(resolved.take_clone_dir());
+            if let Resolved::Pending(resolved) = &mut resolved {
+                let _ = fs::remove_dir_all(&resolved.clone_dir);
             }
             restore_all(&backup_dir, &opts.repo_root, &manifest.files)?;
             return Err(error);
         }
     };
 
-    if source_kind == SourceKind::PendingGit {
-        let _ = fs::remove_dir_all(resolved.take_clone_dir());
+    if let Resolved::Pending(resolved) = &mut resolved {
+        let _ = fs::remove_dir_all(&resolved.clone_dir);
     }
     let _ = fs::remove_dir_all(&backup_dir);
 
@@ -204,13 +204,6 @@ impl Resolved {
                     .join(format!("{}-{}", manifest.name, manifest.version)),
                 SourceKind::Index,
             ),
-        }
-    }
-
-    fn take_clone_dir(&mut self) -> PathBuf {
-        match self {
-            Self::Pending(resolved) => std::mem::take(&mut resolved.clone_dir),
-            _ => unreachable!("only pending installs carry a clone dir"),
         }
     }
 }

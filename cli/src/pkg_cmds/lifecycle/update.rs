@@ -99,7 +99,9 @@ enum Next {
 fn update_one(opts: &UpdateOptions, lock: &LockFile, name: &str) -> Result<UpdateItem> {
     let installed = lock
         .find(name)
-        .expect("targets are validated against the lock above");
+        .ok_or_else(|| LifecycleError::NotInstalled {
+            name: name.to_owned(),
+        })?;
     let installed_version = installed.version.clone();
 
     let next = resolve_next(opts, installed, name)?;
@@ -315,7 +317,9 @@ fn drop_stale_files(
         .iter()
         .map(|entry| strip_root(&entry.dest).to_owned())
         .collect();
-    let installed = lock.find(name).expect("target exists in lock");
+    let Some(installed) = lock.find(name) else {
+        return Ok(());
+    };
     for file in &installed.files {
         if new_set.contains(file) || !lock.owners_of(file, Some(name)).is_empty() {
             continue;

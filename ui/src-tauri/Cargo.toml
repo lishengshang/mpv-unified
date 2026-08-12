@@ -1,0 +1,22 @@
+[package]
+name = "mpv-config"
+version = "0.1.0"
+description = "mpv-config GUI shell (Tauri 2)"
+edition = "2021"
+
+# This crate is intentionally independent of the root workspace
+# (core/cli/pkg). Keep the empty table below to avoid cargo workspace
+# membership errors.
+[workspace]
+
+[lib]
+name = "mpv_config_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

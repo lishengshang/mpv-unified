@@ -783,6 +783,113 @@ fn gen_does_not_emit_uosc_patch_when_all_profiles_disabled() {
 }
 
 #[test]
+fn gen_copies_asset_dirs_and_preserves_uosc_patch() {
+    let root = minimal_root("assets-copy", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
+    );
+    write(
+        &root.path().join("user/profiles-state.json"),
+        "[\"cinema\"]\n",
+    );
+    write(&root.path().join("scripts/uosc/main.lua"), "-- uosc\n");
+    write(&root.path().join("scripts/autoload.lua"), "-- autoload\n");
+    write(&root.path().join("shaders/test.glsl"), "// shader\n");
+    write(&root.path().join("fonts/a.ttf"), "font");
+    write(
+        &root.path().join("script-opts/uosc.conf"),
+        "timeline_style=bar\n",
+    );
+    write(
+        &root.path().join("script-opts/autoload.conf"),
+        "enabled=yes\n",
+    );
+    let out = TestDir::new("assets-copy-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation with assets succeeds");
+
+    // Per-directory summary, not per-file entries.
+    let scripts = report
+        .asset_dirs
+        .iter()
+        .find(|dir| dir.name == "scripts")
+        .expect("scripts summary");
+    assert_eq!(scripts.file_count, 2);
+    assert!(report
+        .asset_dirs
+        .iter()
+        .any(|dir| dir.name == "shaders" && dir.file_count == 1));
+    assert!(report
+        .asset_dirs
+        .iter()
+        .any(|dir| dir.name == "fonts" && dir.file_count == 1));
+    assert!(report
+        .asset_dirs
+        .iter()
+        .any(|dir| dir.name == "script-opts" && dir.file_count == 2));
+    // Files actually landed in the output.
+    assert!(out.path().join("dist/scripts/uosc/main.lua").is_file());
+    assert!(out.path().join("dist/scripts/autoload.lua").is_file());
+    assert!(out.path().join("dist/shaders/test.glsl").is_file());
+    assert!(out.path().join("dist/fonts/a.ttf").is_file());
+    assert_eq!(
+        fs::read_to_string(out.path().join("dist/script-opts/autoload.conf"))
+            .expect("read copied script-opts"),
+        "enabled=yes\n"
+    );
+    // script-opts/uosc.conf: the original was copied first, then the T23
+    // patch appended on top.
+    let uosc = fs::read_to_string(out.path().join("dist/script-opts/uosc.conf"))
+        .expect("read patched uosc.conf");
+    assert!(uosc.starts_with("timeline_style=bar\n"), "{uosc}");
+    assert!(uosc.contains("uosc 方案切换菜单补丁"), "{uosc}");
+    // Excluded: user/ and config/ are sources, not assets.
+    assert!(!out.path().join("dist/user").exists());
+    assert!(!out.path().join("dist/config").exists());
+}
+
+#[test]
+fn gen_dry_run_reports_assets_without_copying() {
+    let root = minimal_root("assets-dry", "volume=50\n", Some("vo=gpu\n"));
+    write(&root.path().join("scripts/uosc/main.lua"), "-- uosc\n");
+    write(&root.path().join("shaders/x.glsl"), "// s\n");
+    let out = TestDir::new("assets-dry-out");
+    let output_path = out.path().join("not-created");
+
+    let report = run_at_root(root.path(), &options(Platform::Linux, &output_path, true))
+        .expect("dry-run succeeds");
+
+    assert!(!output_path.exists(), "dry-run must not create the output");
+    assert!(report
+        .asset_dirs
+        .iter()
+        .any(|dir| dir.name == "scripts" && dir.file_count == 1));
+    assert!(report
+        .asset_dirs
+        .iter()
+        .any(|dir| dir.name == "shaders" && dir.file_count == 1));
+}
+
+#[test]
+fn gen_skips_missing_asset_dirs_silently() {
+    let root = minimal_root("assets-absent", "volume=50\n", Some("vo=gpu\n"));
+    let out = TestDir::new("assets-absent-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation without assets succeeds");
+
+    assert!(report.asset_dirs.is_empty(), "{:?}", report.asset_dirs);
+}
+
+#[test]
 fn real_config_generates_parseable_outputs() {
     let out = TestDir::new("real-out");
 

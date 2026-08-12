@@ -479,6 +479,13 @@ fn run_gen(args: GenArgs) -> i32 {
                     );
                 }
             }
+            for asset in &report.asset_dirs {
+                let action = if dry_run { "将复制" } else { "复制" };
+                println!(
+                    "  {action}资产: {}/ ({} 个文件)",
+                    asset.name, asset.file_count
+                );
+            }
             0
         }
         Err(error) => {

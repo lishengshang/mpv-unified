@@ -12,18 +12,23 @@
 //! `config/input.conf` with the platform variant `config/{platform}.input.conf`,
 //! when present. `profiles.conf` at the repository root is copied verbatim
 //! (the include target of `include="~~/profiles.conf"` must sit next to
-//! `mpv.conf`), and the runtime `files/` directory is created for
+//! `mpv.conf`), the asset directories (`scripts/`, `shaders/`, `fonts/`,
+//! `script-opts/`, `icc/`, `osc-style/`, `vs/`, `script-modules/`) are
+//! copied verbatim so the output works as `mpv --config-dir`, and the
+//! runtime `files/` directory is created for
 //! `log-file="~~/files/mpv.log"`. `--dry-run` reports the planned files
 //! without touching the filesystem.
 //!
 //! Nothing here panics: every failure is a [`GenError`] with a
 //! human-readable Chinese message, and the CLI maps it to exit code 1.
 
+mod assets;
 mod error;
 mod input;
 pub(crate) mod layers;
 mod user;
 
+pub use assets::CopiedAssetDir;
 pub use error::GenError;
 
 use core::conf::{serialize, ConfDoc};
@@ -66,6 +71,9 @@ pub struct GenReport {
     /// Output files, in emission order (`mpv.conf` first, then `input.conf`,
     /// then a copied `profiles.conf` when present).
     pub files: Vec<GeneratedFile>,
+    /// Asset directories copied from the repository root (`scripts/`, ...),
+    /// with per-directory file counts; empty when none exists.
+    pub asset_dirs: Vec<CopiedAssetDir>,
     /// Non-fatal problems (e.g. a skipped optional layer), in order.
     pub warnings: Vec<String>,
 }
@@ -178,6 +186,9 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     // (方案是可选增强,不阻断核心生成流程)。
     let mut mpv_text = serialize(&merged);
     let mut files = Vec::new();
+    // 资产拷贝先于一切生成写入:script-opts/ 原文件先落到输出目录,后续
+    // uosc 补丁在其上追加,保持 T23 语义(生成的 uosc.conf 含方案菜单补丁)。
+    let asset_dirs = assets::copy_assets(root, options)?;
     // uosc 菜单补丁(任务 23):启用方案 ≥1 时,若检测到 uosc,生成
     // dist/script-opts/uosc.conf 补丁并把菜单项追加到 input.conf。
     let mut uosc_menu_lines: Option<String> = None;
@@ -223,6 +234,7 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     Ok(GenReport {
         platform,
         files,
+        asset_dirs,
         warnings,
     })
 }

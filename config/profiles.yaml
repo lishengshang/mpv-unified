@@ -1,0 +1,65 @@
+# 方案定义(由 mpv-config 方案卡片读取,任务 18)
+# - options:mpv.conf 键值对,写入独立 [id] profile 块(首行 profile-restore=copy-equal),
+#   追加在生成结果 mpv.conf 末尾,不修改 user.conf 任何内容。
+# - requires:依赖的包名(见 packages.lock);未安装的依赖会在卡片上显示"缺依赖"。
+# 启用状态持久化在 user/profiles-state.json(首次运行默认启用 cinema)。
+profiles:
+  - id: cinema
+    name: 高清观影
+    desc: 画质优先,着色器与补帧优化
+    icon: 🎬
+    options:
+      - "deband=yes"
+      - "video-sync=display-resample"
+      - "interpolation=yes"
+      - "scale=ewa_lanczossharp"
+    requires: []
+
+  - id: danmaku
+    name: 弹幕直播
+    desc: 直播弹幕场景,缓存与分辨率优先
+    icon: 📺
+    options:
+      - "cache=yes"
+      - "demuxer-max-bytes=256MiB"
+      - "ytdl-format=bestvideo[height<=?1080]+bestaudio/best"
+    requires: []
+
+  - id: game
+    name: 低延迟游戏
+    desc: 减少延迟优先,关闭后处理与插帧
+    icon: 🎮
+    options:
+      - "video-sync=display-resample"
+      - "interpolation=no"
+      - "deband=no"
+      - "scale=bilinear"
+      - "vd-lavc-fast=yes"
+    requires: []
+
+  - id: study
+    name: 学习倍速
+    desc: 倍速播放优化,字幕清晰稳定
+    icon: 📚
+    options:
+      - "speed=1.5"
+      - "sub-font-size=42"
+      - "audio-pitch-correction=yes"
+    requires: []
+
+  - id: music
+    name: 音乐模式
+    desc: 纯音频场景,关闭视频渲染节省资源
+    icon: 🎧
+    options:
+      - "vo=null"
+      - "ao=pipewire"
+      - "demuxer-lavf-o=fflags=+nobuffer"
+    requires: []
+
+  - id: default
+    name: 默认
+    desc: 回退到配置默认行为,不附加任何优化
+    icon: ⚙️
+    options: []
+    requires: []

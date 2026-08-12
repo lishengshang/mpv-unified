@@ -346,6 +346,161 @@ fn unwritable_output_path_is_an_error() {
 }
 
 #[test]
+fn gen_appends_enabled_profile_blocks_to_mpv_conf() {
+    let root = minimal_root("profiles-enabled", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n\
+         \x20 - id: cinema\n\
+         \x20   name: 高清观影\n\
+         \x20   desc: 画质优先\n\
+         \x20   icon: 🎬\n\
+         \x20   options:\n\
+         \x20     - \"deband=yes\"\n\
+         \x20   requires: []\n\
+         \x20 - id: music\n\
+         \x20   name: 音乐模式\n\
+         \x20   desc: 纯音频\n\
+         \x20   icon: 🎧\n\
+         \x20   options:\n\
+         \x20     - \"vo=null\"\n\
+         \x20   requires: []\n",
+    );
+    write(
+        &root.path().join("user/profiles-state.json"),
+        "[\"cinema\",\"music\"]\n",
+    );
+    let out = TestDir::new("profiles-enabled-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation with profiles succeeds");
+
+    assert!(
+        report.warnings.iter().all(|w| !w.contains("方案")),
+        "no profile warnings on the happy path: {:?}",
+        report.warnings
+    );
+    let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    // Layer content stays intact, blocks append at the end with the
+    // copy-equal first line, the generated comment, and apply lines.
+    assert!(mpv.starts_with("volume=50\nvo=gpu\n"), "{mpv}");
+    assert!(mpv.contains(
+        "# 方案:高清观影 (由 mpv-config 生成)\n[cinema]\nprofile-restore=copy-equal\ndeband=yes\n"
+    ), "{mpv}");
+    assert!(mpv.contains(
+        "# 方案:音乐模式 (由 mpv-config 生成)\n[music]\nprofile-restore=copy-equal\nvo=null\n"
+    ), "{mpv}");
+    assert!(mpv.ends_with("profile=cinema\nprofile=music\n"), "{mpv}");
+    // The appended region still parses as mpv.conf.
+    let doc = core::conf::parse(&mpv).expect("output with profile blocks must parse");
+    assert_eq!(core::conf::serialize(&doc), mpv);
+}
+
+#[test]
+fn gen_defaults_to_cinema_profile_when_state_is_missing() {
+    let root = minimal_root("profiles-default", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n\
+         \x20 - id: cinema\n\
+         \x20   name: 高清观影\n\
+         \x20   icon: 🎬\n\
+         \x20   options:\n\
+         \x20     - \"deband=yes\"\n\
+         \x20   requires: []\n",
+    );
+    let out = TestDir::new("profiles-default-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("first-run generation succeeds");
+
+    let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    assert!(mpv.contains("[cinema]\nprofile-restore=copy-equal\n"), "{mpv}");
+    assert!(mpv.contains("profile=cinema"), "{mpv}");
+    assert!(
+        !root.path().join("user/profiles-state.json").exists(),
+        "gen reads state but must not write it"
+    );
+    assert!(
+        report.warnings.iter().all(|w| !w.contains("方案")),
+        "{:?}",
+        report.warnings
+    );
+}
+
+#[test]
+fn gen_emits_no_profile_blocks_when_all_profiles_are_disabled() {
+    let root = minimal_root("profiles-disabled", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
+    );
+    write(&root.path().join("user/profiles-state.json"), "[]\n");
+    let out = TestDir::new("profiles-disabled-out");
+
+    run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation succeeds");
+
+    let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    assert!(!mpv.contains("[cinema]"), "no block when disabled: {mpv}");
+    assert!(!mpv.contains("profile=cinema"), "no apply line: {mpv}");
+}
+
+#[test]
+fn corrupt_profiles_yaml_warns_and_skips_blocks() {
+    let root = minimal_root("profiles-corrupt", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n  - id: dup\n    name: A\n  - id: dup\n    name: B\n",
+    );
+    let out = TestDir::new("profiles-corrupt-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("gen continues when profiles.yaml is broken");
+
+    assert!(
+        report.warnings.iter().any(|w| w.contains("方案块")),
+        "{:?}",
+        report.warnings
+    );
+    let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    assert!(!mpv.contains("[dup]"), "no partial blocks: {mpv}");
+}
+
+#[test]
+fn missing_profiles_yaml_is_skipped_silently() {
+    let root = minimal_root("profiles-absent", "volume=50\n", Some("vo=gpu\n"));
+    let out = TestDir::new("profiles-absent-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation without profiles.yaml succeeds");
+
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|w| !w.contains("方案")),
+        "missing profiles.yaml must not warn: {:?}",
+        report.warnings
+    );
+}
+
+#[test]
 fn real_config_generates_parseable_outputs() {
     let out = TestDir::new("real-out");
 

@@ -26,6 +26,7 @@ use core::platform::{self, Platform};
 use input::build_input;
 use layers::{load_layer, load_packages, platform_name};
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Options for a single `gen` run.
@@ -150,8 +151,19 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
             }
         })?;
 
+    // 方案块追加(任务 18):启用方案 → 生成 mpv profile 块,追加到 mpv.conf
+    // 末尾。profiles.yaml 缺失时静默跳过;损坏或状态读取失败时警告并跳过
+    // (方案是可选增强,不阻断核心生成流程)。
+    let mut mpv_text = serialize(&merged);
+    if let Some(blocks) = profile_blocks(root, &mut warnings)? {
+        if !mpv_text.ends_with('\n') {
+            mpv_text.push('\n');
+        }
+        mpv_text.push_str(&blocks);
+    }
+
     let mut files = Vec::new();
-    write_output(options, "mpv.conf", &serialize(&merged), &mut files)?;
+    write_output(options, "mpv.conf", &mpv_text, &mut files)?;
     if let Some(input) = build_input(root, platform)? {
         write_output(options, "input.conf", &input, &mut files)?;
     }
@@ -161,6 +173,55 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
         files,
         warnings,
     })
+}
+
+/// Render the profile blocks for the enabled profiles, if any.
+///
+/// Reads `config/profiles.yaml` plus the enabled set from
+/// `user/profiles-state.json` (first run defaults to `[cinema]`, via
+/// [`core::profiles::effective_enabled`]) and returns the block text to
+/// append to `mpv.conf`. A missing profiles file yields `None` silently;
+/// a broken file or unreadable state yields a warning plus `None` — the
+/// optional enhancement never blocks generation.
+fn profile_blocks(root: &Path, warnings: &mut Vec<String>) -> Result<Option<String>, GenError> {
+    let yaml_path = root.join("config/profiles.yaml");
+    let raw = match fs::read_to_string(&yaml_path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(GenError::Io {
+                action: "读取",
+                path: yaml_path,
+                source,
+            });
+        }
+    };
+    let profiles = match core::profiles::parse_yaml(&raw) {
+        Ok(profiles) => profiles,
+        Err(error) => {
+            warnings.push(format!(
+                "config/profiles.yaml 解析失败,已跳过方案块:{error}"
+            ));
+            return Ok(None);
+        }
+    };
+    let enabled = match core::profiles::effective_enabled(&root.join("user")) {
+        Ok(enabled) => enabled,
+        Err(error) => {
+            warnings.push(format!(
+                "读取方案启用状态失败,已跳过方案块:{error}"
+            ));
+            return Ok(None);
+        }
+    };
+    if enabled.is_empty() {
+        return Ok(None);
+    }
+    let blocks = core::profiles::generate_profile_blocks(&profiles, &enabled);
+    if blocks.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(blocks))
 }
 
 /// Write (or, in dry-run mode, only plan) one output file into `options.out`.

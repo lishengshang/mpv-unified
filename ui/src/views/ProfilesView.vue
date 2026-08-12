@@ -1,6 +1,401 @@
+<script setup lang="ts">
+import { invoke } from "@tauri-apps/api/core";
+import { computed, onMounted, ref } from "vue";
+
+interface ProfileInfo {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  options: string[];
+  requires: string[];
+  requires_met: boolean;
+}
+
+interface RegenFile {
+  path: string;
+  line_count: number;
+}
+
+interface RegenSummary {
+  files: RegenFile[];
+  warnings: string[];
+}
+
+interface Toast {
+  id: number;
+  kind: "ok" | "err";
+  text: string;
+}
+
+const profiles = ref<ProfileInfo[]>([]);
+const enabled = ref<Set<string>>(new Set());
+const loading = ref(true);
+const error = ref("");
+const busy = ref(false);
+const toasts = ref<Toast[]>([]);
+const summary = ref("");
+let toastSeq = 0;
+
+const enabledCount = computed(() => enabled.value.size);
+
+function toast(kind: Toast["kind"], text: string) {
+  const id = ++toastSeq;
+  toasts.value.push({ id, kind, text });
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((t) => t.id !== id);
+  }, 3600);
+}
+
+async function load() {
+  loading.value = true;
+  error.value = "";
+  try {
+    const [list, state] = await Promise.all([
+      invoke<ProfileInfo[]>("list_profiles"),
+      invoke<string[]>("get_profile_state"),
+    ]);
+    profiles.value = list;
+    enabled.value = new Set(state);
+  } catch (cause) {
+    error.value = String(cause);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function toggle(profile: ProfileInfo) {
+  if (!profile.requires_met) {
+    toast("err", `「${profile.name}」缺少依赖:${profile.requires.join("、")},请先到包商店安装`);
+    return;
+  }
+  const next = new Set(enabled.value);
+  if (next.has(profile.id)) {
+    next.delete(profile.id);
+  } else {
+    next.add(profile.id);
+  }
+  try {
+    await invoke("set_profile_state", { enabledIds: [...next] });
+    enabled.value = next;
+  } catch (cause) {
+    toast("err", String(cause));
+  }
+}
+
+async function regenerate() {
+  busy.value = true;
+  try {
+    const report = await invoke<RegenSummary>("regenerate");
+    summary.value = report.files
+      .map((f) => `${f.path} (${f.line_count} 行)`)
+      .join(", ");
+    toast("ok", `已重新生成配置:${summary.value}`);
+    for (const warning of report.warnings) {
+      toast("err", warning);
+    }
+  } catch (cause) {
+    toast("err", String(cause));
+  } finally {
+    busy.value = false;
+  }
+}
+
+onMounted(load);
+</script>
+
 <template>
-  <section>
-    <h2>方案</h2>
-    <p>浏览并启用预设方案,一键组合选项覆盖与依赖资产。这里是默认页面。</p>
+  <section class="profiles">
+    <header class="page-head">
+      <div>
+        <h2>方案</h2>
+        <p class="sub">
+          点击卡片启用/停用预设方案(可多选),方案作为独立 profile 块写入生成的
+          mpv.conf,不会改动你的手动配置。
+        </p>
+      </div>
+      <div class="head-actions">
+        <span class="count">{{ enabledCount }} 个已启用</span>
+        <button class="apply" :disabled="busy" @click="regenerate">
+          {{ busy ? "生成中…" : "应用并生成" }}
+        </button>
+      </div>
+    </header>
+
+    <p v-if="summary" class="summary">上次生成:{{ summary }}</p>
+
+    <div v-if="loading" class="state-panel">加载方案中…</div>
+
+    <div v-else-if="error" class="state-panel error">
+      <p>方案加载失败</p>
+      <p class="detail">{{ error }}</p>
+      <button class="apply" @click="load">重试</button>
+    </div>
+
+    <div v-else class="grid">
+      <article
+        v-for="profile in profiles"
+        :key="profile.id"
+        class="card"
+        :class="{
+          active: enabled.has(profile.id),
+          blocked: !profile.requires_met,
+        }"
+        role="button"
+        :aria-pressed="enabled.has(profile.id)"
+        @click="toggle(profile)"
+      >
+        <div class="icon" :aria-hidden="true">{{ profile.icon }}</div>
+        <div class="body">
+          <h3>{{ profile.name }}</h3>
+          <p>{{ profile.desc }}</p>
+          <p v-if="profile.options.length" class="opts">
+            {{ profile.options.join(" · ") }}
+          </p>
+        </div>
+        <span v-if="!profile.requires_met" class="badge missing">缺依赖</span>
+        <span v-else-if="enabled.has(profile.id)" class="badge on">已启用</span>
+      </article>
+    </div>
+
+    <div v-if="!loading && !error && profiles.length === 0" class="state-panel">
+      未找到方案定义(config/profiles.yaml)。
+    </div>
+
+    <div class="toasts" aria-live="polite">
+      <div
+        v-for="t in toasts"
+        :key="t.id"
+        class="toast"
+        :class="t.kind"
+      >
+        {{ t.text }}
+      </div>
+    </div>
   </section>
 </template>
+
+<style scoped>
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.sub {
+  margin: 0;
+  max-width: 560px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.count {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.apply {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-control);
+  background-color: var(--accent);
+  color: #10131a;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+
+.apply:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.apply:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.apply:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.summary {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background-color: var(--accent-soft);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background-color: var(--surface);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease,
+    background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  border-color: #4a5060;
+  background-color: var(--surface-hover);
+}
+
+.card.active {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.card.blocked {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background-color: #2c3038;
+  font-size: 24px;
+}
+
+.body {
+  min-width: 0;
+}
+
+.body h3 {
+  margin: 2px 0 4px;
+  font-size: 16px;
+}
+
+.body p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.opts {
+  margin-top: 8px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px !important;
+  opacity: 0.8;
+}
+
+.badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge.on {
+  background-color: rgba(76, 195, 138, 0.16);
+  color: var(--ok);
+}
+
+.badge.missing {
+  background-color: rgba(224, 180, 92, 0.16);
+  color: var(--warn);
+}
+
+.state-panel {
+  padding: 32px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-card);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.state-panel.error p:first-child {
+  margin: 0 0 8px;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.state-panel.error .detail {
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.toasts {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+}
+
+.toast {
+  max-width: 420px;
+  padding: 11px 16px;
+  border-radius: var(--radius-control);
+  background-color: var(--surface-hover);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  line-height: 1.5;
+  animation: toast-in 0.2s ease;
+}
+
+.toast.ok {
+  border-color: rgba(76, 195, 138, 0.5);
+  color: var(--ok);
+}
+
+.toast.err {
+  border-color: rgba(229, 115, 115, 0.5);
+  color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+</style>

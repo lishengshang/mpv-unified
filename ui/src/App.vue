@@ -36,6 +36,19 @@ const navItems = [
   font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: #e6e6e6;
   background-color: #1b1d22;
+  /* design tokens (task 18): shared by every view */
+  --accent: #7c9cff;
+  --accent-soft: rgba(124, 156, 255, 0.14);
+  --surface: #23262d;
+  --surface-hover: #2b2f38;
+  --border: #33373f;
+  --text: #e6e6e6;
+  --text-muted: #a8adb8;
+  --ok: #4cc38a;
+  --warn: #e0b45c;
+  --danger: #e57373;
+  --radius-card: 12px;
+  --radius-control: 8px;
 }
 
 * {

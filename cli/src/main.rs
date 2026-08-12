@@ -469,11 +469,15 @@ fn run_gen(args: GenArgs) -> i32 {
                 } else {
                     "生成"
                 };
-                println!(
-                    "  {action} {} ({} 行)",
-                    file.path.display(),
-                    file.line_count
-                );
+                if file.copied {
+                    println!("  {action} {} (复制)", file.path.display());
+                } else {
+                    println!(
+                        "  {action} {} ({} 行)",
+                        file.path.display(),
+                        file.line_count
+                    );
+                }
             }
             0
         }

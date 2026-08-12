@@ -10,8 +10,11 @@
 //! page (only non-default values), so it sits above the manual `user.conf`.
 //! `input.conf` is assembled the same way by concatenating
 //! `config/input.conf` with the platform variant `config/{platform}.input.conf`,
-//! when present. `--dry-run` reports the planned files without touching the
-//! filesystem.
+//! when present. `profiles.conf` at the repository root is copied verbatim
+//! (the include target of `include="~~/profiles.conf"` must sit next to
+//! `mpv.conf`), and the runtime `files/` directory is created for
+//! `log-file="~~/files/mpv.log"`. `--dry-run` reports the planned files
+//! without touching the filesystem.
 //!
 //! Nothing here panics: every failure is a [`GenError`] with a
 //! human-readable Chinese message, and the CLI maps it to exit code 1.
@@ -50,6 +53,9 @@ pub struct GeneratedFile {
     pub path: PathBuf,
     /// Number of lines in the emitted content.
     pub line_count: usize,
+    /// True when the file was copied verbatim from the repository root
+    /// (`profiles.conf`) instead of generated from layers.
+    pub copied: bool,
 }
 
 /// Outcome of a `gen` run.
@@ -57,7 +63,8 @@ pub struct GeneratedFile {
 pub struct GenReport {
     /// Platform the configuration was generated for.
     pub platform: Platform,
-    /// Output files, in emission order (`mpv.conf` first, then `input.conf`).
+    /// Output files, in emission order (`mpv.conf` first, then `input.conf`,
+    /// then a copied `profiles.conf` when present).
     pub files: Vec<GeneratedFile>,
     /// Non-fatal problems (e.g. a skipped optional layer), in order.
     pub warnings: Vec<String>,
@@ -210,11 +217,59 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
         write_output(options, "input.conf", &input, &mut files)?;
     }
 
+    copy_profiles_conf(root, options, &mut files)?;
+    ensure_files_dir(options);
+
     Ok(GenReport {
         platform,
         files,
         warnings,
     })
+}
+
+/// Copy the repository-root `profiles.conf` next to `mpv.conf` when present.
+///
+/// `config/{platform}.conf` may carry `include="~~/profiles.conf"`, and mpv's
+/// `~~/` resolves to the output directory — the include target must exist
+/// there or mpv fails with `Cannot open file .../profiles.conf`. A missing
+/// source is skipped silently (it is an optional asset, like in
+/// `tools/build-dist.sh`).
+fn copy_profiles_conf(
+    root: &Path,
+    options: &GenOptions,
+    files: &mut Vec<GeneratedFile>,
+) -> Result<(), GenError> {
+    let source = root.join("profiles.conf");
+    if !source.is_file() {
+        return Ok(());
+    }
+    let target = options.out.join("profiles.conf");
+    if !options.dry_run {
+        fs::copy(&source, &target).map_err(|source_error| GenError::Io {
+            action: "复制",
+            path: target.clone(),
+            source: source_error,
+        })?;
+    }
+    let line_count = fs::read_to_string(&source)
+        .map(|text| text.lines().count())
+        .unwrap_or(0);
+    files.push(GeneratedFile {
+        path: target,
+        line_count,
+        copied: true,
+    });
+    Ok(())
+}
+
+/// Create the runtime `files/` directory in the output (the `log-file` target
+/// of `base.conf`), best-effort: an unwritable output is already reported by
+/// the file writes, so a failure here is ignored rather than blocking
+/// generation.
+fn ensure_files_dir(options: &GenOptions) {
+    if !options.dry_run {
+        let _ = fs::create_dir_all(options.out.join("files"));
+    }
 }
 
 /// The loaded profile definitions plus the enabled ids, as returned by
@@ -336,6 +391,7 @@ fn write_output(
     files.push(GeneratedFile {
         path,
         line_count: text.lines().count(),
+        copied: false,
     });
     Ok(())
 }

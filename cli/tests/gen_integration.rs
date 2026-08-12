@@ -568,6 +568,88 @@ fn corrupt_profiles_yaml_warns_and_skips_blocks() {
 }
 
 #[test]
+fn gen_copies_profiles_conf_next_to_mpv_conf_when_present() {
+    let root = minimal_root("profiles-copy", "volume=50\n", Some("vo=gpu\n"));
+    let profiles = "# 用户自定义\nsub-font-size=44\n";
+    write(&root.path().join("profiles.conf"), profiles);
+    let out = TestDir::new("profiles-copy-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation with profiles.conf succeeds");
+
+    let copied = report
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("profiles.conf"))
+        .expect("copied profiles.conf must be reported");
+    assert!(copied.copied, "report must mark the copy: {copied:?}");
+    assert_eq!(
+        fs::read_to_string(out.path().join("dist/profiles.conf")).expect("read copied profiles"),
+        profiles,
+        "profiles.conf must be copied verbatim next to mpv.conf"
+    );
+    assert!(out.path().join("dist/files").is_dir(), "files/ must exist");
+}
+
+#[test]
+fn gen_skips_missing_profiles_conf_silently() {
+    let root = minimal_root("profiles-absent-copy", "volume=50\n", Some("vo=gpu\n"));
+    let out = TestDir::new("profiles-absent-copy-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation without profiles.conf succeeds");
+
+    assert!(
+        report
+            .files
+            .iter()
+            .all(|file| !file.path.ends_with("profiles.conf")),
+        "no profiles.conf entry when source is missing: {:?}",
+        report.files
+    );
+    assert!(
+        !out.path().join("dist/profiles.conf").exists(),
+        "no profiles.conf must be written"
+    );
+    assert!(
+        out.path().join("dist/files").is_dir(),
+        "files/ is created regardless"
+    );
+}
+
+#[test]
+fn dry_run_reports_profiles_conf_without_copying() {
+    let root = minimal_root("profiles-copy-dry", "volume=50\n", Some("vo=gpu\n"));
+    write(&root.path().join("profiles.conf"), "# 计划复制\n");
+    let out = TestDir::new("profiles-copy-dry-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), true),
+    )
+    .expect("dry-run succeeds");
+
+    assert!(
+        report
+            .files
+            .iter()
+            .any(|file| file.path.ends_with("profiles.conf") && file.copied),
+        "dry-run must plan the copy: {:?}",
+        report.files
+    );
+    assert!(
+        !out.path().join("dist").exists(),
+        "dry-run must not create the output directory"
+    );
+}
+
+#[test]
 fn missing_profiles_yaml_is_skipped_silently() {
     let root = minimal_root("profiles-absent", "volume=50\n", Some("vo=gpu\n"));
     let out = TestDir::new("profiles-absent-out");

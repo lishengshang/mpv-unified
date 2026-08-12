@@ -79,3 +79,34 @@ tools/
 * [hooke007 配置手册](https://hooke007.github.io/mpv-lazy/mpv.html)
 * [mpv 原版官方的开发版手册（英文）](https://mpv.io/manual/master/)
 * [mpv 官方文档的汉化版-hooke007](https://github.com/hooke007/mpv_doc-CN)
+
+### 致谢
+
+本项目配置体系源自以下上游项目 (MIT 许可 fork 链继承, 见根 `LICENSE.MD`):
+
+* [lishengshang/mpv-config](https://github.com/lishengshang/mpv-config) — Linux 移植版配置基础
+  (现役 `~/.config/mpv/` 的移植来源, 本仓库的 config/ 四层结构即由此衍生)
+* [hooke007/mpv-lazy](https://github.com/hooke007/mpv-lazy) — 配置手册与 vs/ 滤镜脚本
+  (k7sfunc 补帧/超分方案、`vs-plugins/models` 模型约定)
+* [dyphire/mpv-config](https://github.com/dyphire/mpv-config) — Windows 原版配置与脚本着色器集
+  (本仓库主体内容来源)
+
+### 目录结构
+
+```
+config/             # 配置源: base + 平台层 + input 层 (T6 生成最终 mpv.conf)
+cli/ core/ pkg/ tools/   # mpv-config-manager 本体 (Rust + CLI)
+user/               # user 层模板 (user.example.conf, 实体已 gitignore)
+scripts/            # mpv 脚本 (lua/子目录) + display-info.dll (Windows)
+script-opts/        # 脚本配置 (API key 类为注释模板形态, 实体不入库)
+shaders/            # 着色器 (Ani4k/Anime4K/AnimeJaNai/igv/nnedi3/other/ravu)
+fonts/              # 图标字体 (uosc/OSC 用)
+icc/                # 色彩管理 ICC 配置
+vs/                 # VapourSynth 滤镜脚本 (依赖外部 k7sfunc + models, 见 docs/platform-assets.md)
+osc-style/ script-modules/ archive/   # 备用 OSC 样式 / 脚本模块 / 原版备份
+CATEGORIES.md       # 脚本分类参考 (包商店 11 类, 决策 D8)
+docs/               # 平台差异 / 平台特有资产 / 等价验证白名单
+```
+
+平台特有文件取舍详见 [`docs/platform-assets.md`](docs/platform-assets.md)。
+

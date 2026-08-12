@@ -1,6 +1,7 @@
 //! `mpv-config` binary: clap-driven subcommand framework.
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use cli::doctor;
 use cli::gen::{self, GenOptions};
 use core::platform::Platform;
 use std::path::PathBuf;
@@ -20,6 +21,15 @@ struct Cli {
 enum Command {
     /// 读取 config/ 各层(base → 平台 → 包 → user),生成最终 mpv.conf 与 input.conf
     Gen(GenArgs),
+    /// 仓库健康检查(当前支持 --upgrade-check)
+    Doctor(DoctorArgs),
+}
+
+#[derive(Args, Debug)]
+struct DoctorArgs {
+    /// 检查本地 VERSION 并输出升级说明
+    #[arg(long)]
+    upgrade_check: bool,
 }
 
 #[derive(Args, Debug)]
@@ -59,8 +69,26 @@ fn main() {
     let cli = Cli::parse();
     let code = match cli.command {
         Command::Gen(args) => run_gen(args),
+        Command::Doctor(args) => run_doctor(args),
     };
     std::process::exit(code);
+}
+
+fn run_doctor(args: DoctorArgs) -> i32 {
+    if !args.upgrade_check {
+        eprintln!("doctor 完整自检尚未实现;当前可用:mpv-config doctor --upgrade-check");
+        return 1;
+    }
+    match doctor::upgrade_check(&doctor::check_root()) {
+        Ok(message) => {
+            println!("{message}");
+            0
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
+            1
+        }
+    }
 }
 
 fn run_gen(args: GenArgs) -> i32 {
@@ -125,7 +153,9 @@ mod tests {
     fn gen_args_map_to_platform_with_default_out() {
         let cli = Cli::try_parse_from(["mpv-config", "gen", "--platform", "windows", "--dry-run"])
             .expect("valid args parse");
-        let Command::Gen(args) = cli.command;
+        let Command::Gen(args) = cli.command else {
+            unreachable!("args parsed as gen")
+        };
         assert_eq!(args.platform, Some(PlatformArg::Windows));
         assert!(args.dry_run);
         assert_eq!(args.out, PathBuf::from("dist"));
@@ -134,7 +164,9 @@ mod tests {
     #[test]
     fn gen_without_platform_allows_host_detection() {
         let cli = Cli::try_parse_from(["mpv-config", "gen"]).expect("valid args parse");
-        let Command::Gen(args) = cli.command;
+        let Command::Gen(args) = cli.command else {
+            unreachable!("args parsed as gen")
+        };
         assert_eq!(args.platform, None);
         assert!(!args.dry_run);
     }
@@ -143,7 +175,28 @@ mod tests {
     fn macos_platform_accepts_macos_value() {
         let cli = Cli::try_parse_from(["mpv-config", "gen", "--platform", "macos"])
             .expect("macos value accepted");
-        let Command::Gen(args) = cli.command;
+        let Command::Gen(args) = cli.command else {
+            unreachable!("args parsed as gen")
+        };
         assert_eq!(args.platform, Some(PlatformArg::MacOS));
+    }
+
+    #[test]
+    fn doctor_upgrade_check_flag_parses() {
+        let cli = Cli::try_parse_from(["mpv-config", "doctor", "--upgrade-check"])
+            .expect("doctor --upgrade-check parses");
+        let Command::Doctor(args) = cli.command else {
+            unreachable!("args parsed as doctor")
+        };
+        assert!(args.upgrade_check);
+    }
+
+    #[test]
+    fn doctor_without_flag_parses_and_disables_upgrade_check() {
+        let cli = Cli::try_parse_from(["mpv-config", "doctor"]).expect("bare doctor parses");
+        let Command::Doctor(args) = cli.command else {
+            unreachable!("args parsed as doctor")
+        };
+        assert!(!args.upgrade_check);
     }
 }

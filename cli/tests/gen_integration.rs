@@ -2,7 +2,9 @@
 
 use cli::gen::{run_at_root, GenOptions};
 use core::platform::Platform;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -121,26 +123,180 @@ fn missing_base_file_is_a_clear_error() {
 }
 
 #[test]
-fn missing_user_file_is_skipped() {
-    let root = minimal_root("missing-user", "volume=50\n", Some("volume=90\n"));
-    let out = TestDir::new("missing-user-out");
+fn gen_bootstraps_user_layer_on_first_run() {
+    let root = minimal_root("first-run-user", "volume=50\n", Some("volume=90\n"));
+    let out = TestDir::new("first-run-user-out");
 
     let report = run_at_root(
         root.path(),
         &options(Platform::Linux, &out.path().join("dist"), false),
     )
-    .expect("missing user is optional");
+    .expect("first-run generation succeeds");
 
-    assert!(report.warnings.is_empty());
-    assert_eq!(
-        fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output"),
-        "volume=90\n"
+    assert!(
+        report.warnings.iter().any(|w| w.contains("自动创建")),
+        "first run must report the bootstrap: {:?}",
+        report.warnings
     );
+    let user_conf =
+        fs::read_to_string(root.path().join("user/user.conf")).expect("user.conf auto-created");
+    assert!(user_conf.starts_with("# user.conf"), "{user_conf}");
+    let merged = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    assert!(merged.starts_with("volume=90\n"), "{merged}");
+    assert!(merged.contains("# user.conf — 个人配置层"), "{merged}");
+}
+
+#[test]
+fn gen_copies_user_example_conf_as_user_conf_when_template_exists() {
+    let root = minimal_root("template-user", "volume=50\n", Some("volume=90\n"));
+    write(
+        &root.path().join("user/user.example.conf"),
+        "# 模板头部\nvolume=1\n",
+    );
+    let out = TestDir::new("template-user-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation succeeds");
+
+    assert!(report
+        .warnings
+        .iter()
+        .any(|w| w.contains("user.example.conf")));
+    assert_eq!(
+        fs::read_to_string(root.path().join("user/user.conf")).expect("user.conf from template"),
+        "# 模板头部\nvolume=1\n"
+    );
+    let merged = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    assert!(
+        merged.contains("volume=1"),
+        "user layer overrides base: {merged}"
+    );
+    assert!(
+        merged.contains("# 模板头部"),
+        "template comment preserved: {merged}"
+    );
+}
+
+#[test]
+fn gen_never_overwrites_existing_user_conf() {
+    let root = minimal_root("keep-user", "volume=50\n", Some("volume=90\n"));
+    let custom = "# 我的自定义\nsub-font-size=44\n";
+    write(&root.path().join("user/user.conf"), custom);
+    let out = TestDir::new("keep-user-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation succeeds");
+
+    assert!(
+        report.warnings.iter().all(|w| !w.contains("自动创建")),
+        "no bootstrap on second run: {:?}",
+        report.warnings
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join("user/user.conf")).expect("user.conf intact"),
+        custom,
+        "existing user.conf must never be rewritten"
+    );
+}
+
+#[test]
+fn invalid_user_conf_errors_without_overwriting() {
+    let root = minimal_root("invalid-user", "volume=50\n", Some("volume=90\n"));
+    let invalid = "volume=50\nsub-font-size=\"unterminated\n";
+    write(&root.path().join("user/user.conf"), invalid);
+    let out = TestDir::new("invalid-user-out");
+
+    let error = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect_err("invalid user.conf must fail generation");
+
+    let message = error.to_string();
+    assert!(message.contains("user/user.conf"), "{message}");
+    assert!(message.contains("line"), "{message}");
+    assert_eq!(
+        fs::read_to_string(root.path().join("user/user.conf")).expect("user.conf intact"),
+        invalid,
+        "user.conf must be preserved byte-for-byte on parse failure"
+    );
+}
+
+#[test]
+fn dry_run_does_not_bootstrap_user_layer() {
+    let root = minimal_root("dry-run-user", "volume=50\n", Some("volume=90\n"));
+    let out = TestDir::new("dry-run-user-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), true),
+    )
+    .expect("dry-run succeeds");
+
+    assert!(
+        report.warnings.is_empty(),
+        "dry-run must not touch the filesystem: {:?}",
+        report.warnings
+    );
+    assert!(
+        !root.path().join("user").exists(),
+        "dry-run must not create the user layer"
+    );
+}
+
+/// Stable content fingerprint (DefaultHasher with fixed keys), standing in
+/// for an md5 in tests: equal bytes → equal fingerprint.
+fn fingerprint(path: &Path) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    fs::read(path)
+        .expect("read file for fingerprint")
+        .hash(&mut hasher);
+    hasher.finish()
+}
+
+#[test]
+fn upgrade_simulation_preserves_user_layer() {
+    // 模拟旧版布局:app 层 + user 层(含自定义内容)
+    let root = TestDir::new("upgrade-sim");
+    write(&root.path().join("config/base.conf"), "volume=50\n");
+    write(&root.path().join("config/linux.conf"), "vo=gpu\n");
+    write(&root.path().join("scripts/old-script.lua"), "-- old\n");
+    write(&root.path().join("VERSION"), "0.1.0-dev\n");
+    let custom = "# 我的自定义\nsub-font-size=44\nassrt-token=abc123\n";
+    write(&root.path().join("user/user.conf"), custom);
+
+    let before = fingerprint(&root.path().join("user/user.conf"));
+
+    // 模拟"新版替换":重新拷贝/覆盖 app 层文件,完全不碰 user 层
+    write(&root.path().join("config/base.conf"), "volume=55\n");
+    write(&root.path().join("config/linux.conf"), "vo=gpu-next\n");
+    write(&root.path().join("scripts/new-script.lua"), "-- new\n");
+    write(&root.path().join("VERSION"), "0.2.0\n");
+
+    let after = fingerprint(&root.path().join("user/user.conf"));
+    assert_eq!(
+        before, after,
+        "user.conf fingerprint must be unchanged by app-layer replacement"
+    );
+    let preserved = fs::read_to_string(root.path().join("user/user.conf")).expect("read user.conf");
+    assert_eq!(
+        preserved, custom,
+        "custom user content must survive upgrade"
+    );
+    assert!(preserved.contains("abc123"), "secret stays in user layer");
 }
 
 #[test]
 fn missing_macos_layer_is_warned_and_skipped() {
     let root = minimal_root("missing-macos", "vo=gpu\n", None);
+    // Pre-seed the user layer so the macOS warning is the only one.
+    write(&root.path().join("user/user.conf"), "\n");
     let out = TestDir::new("missing-macos-out");
 
     let report = run_at_root(
@@ -149,9 +305,11 @@ fn missing_macos_layer_is_warned_and_skipped() {
     )
     .expect("missing macOS layer is optional");
 
-    assert_eq!(
-        fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output"),
-        "vo=gpu\n"
+    assert!(
+        fs::read_to_string(out.path().join("dist/mpv.conf"))
+            .expect("read mpv output")
+            .starts_with("vo=gpu"),
+        "base content must survive"
     );
     assert_eq!(report.warnings.len(), 1);
     assert!(report.warnings[0].contains("macOS"));
@@ -197,7 +355,13 @@ fn real_config_generates_parseable_outputs() {
     )
     .expect("real config generation succeeds");
 
-    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    // The only acceptable warning on the real repo is the first-run user
+    // layer bootstrap (present only when user/user.conf does not exist yet).
+    assert!(
+        report.warnings.iter().all(|w| w.contains("自动创建")),
+        "{:?}",
+        report.warnings
+    );
     assert!(report.files.iter().any(|f| f.path.ends_with("mpv.conf")));
     assert!(report.files.iter().any(|f| f.path.ends_with("input.conf")));
 

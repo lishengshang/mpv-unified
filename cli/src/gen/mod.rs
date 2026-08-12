@@ -15,7 +15,8 @@
 
 mod error;
 mod input;
-mod layers;
+pub(crate) mod layers;
+mod user;
 
 pub use error::GenError;
 
@@ -70,7 +71,7 @@ pub fn run(options: &GenOptions) -> Result<GenReport, GenError> {
 /// repository root is its parent, one level up. Up to two ancestor levels
 /// are probed for `config/base.conf` (tolerating a deeper nesting), and the
 /// workspace root is the fallback when neither has one.
-fn repo_root() -> PathBuf {
+pub(crate) fn repo_root() -> PathBuf {
     let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut ancestors = Vec::new();
     let mut dir = cli_dir.as_path();
@@ -131,6 +132,13 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     };
 
     let packages = load_packages(root, platform)?;
+
+    if !options.dry_run {
+        if let Some(notice) = user::ensure_user_layer(root)? {
+            warnings.push(notice);
+        }
+    }
+
     let user = load_layer(root, "user/user.conf", platform, false)?;
 
     let merged =

@@ -104,6 +104,8 @@ copy_file LICENSE.MD 1
 copy_file VERSION 1
 copy_file README.md 0
 copy_file CATEGORIES.md 0
+# linux.conf include="~~/profiles.conf" 的 include 目标(zip 根,与 mpv.conf 同级)
+copy_file profiles.conf 0
 
 # user 层模板(升级契约:zip 只含 user.example.conf 模板,不含任何实体)
 if [ -f user/user.example.conf ]; then

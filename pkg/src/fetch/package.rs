@@ -84,17 +84,16 @@ fn run(
         });
     }
 
-    let final_dir = cache_dir
-        .join("packages")
-        .join(format!("{}-{}", parsed.name, parsed.version));
+    let packages_dir = cache_dir.join("packages");
+    fs::create_dir_all(&packages_dir)
+        .map_err(io_error(format!("create {}", packages_dir.display())))?;
+    let final_dir = packages_dir.join(format!("{}-{}", parsed.name, parsed.version));
     if final_dir.exists() {
         fs::remove_dir_all(&final_dir).map_err(io_error(format!(
             "remove stale cache {}",
             final_dir.display()
         )))?;
     }
-    fs::create_dir_all(final_dir.parent().expect("final dir has a parent"))
-        .map_err(io_error("create packages dir".to_owned()))?;
     fs::rename(&extracted, &final_dir).map_err(io_error(format!(
         "move extracted package to {}",
         final_dir.display()
@@ -220,16 +219,19 @@ fn validate_entries(archive: &str, listing: Vec<u8>) -> Result<(), FetchError> {
 fn find_manifest(dir: &Path) -> Result<PathBuf, FetchError> {
     let mut found = Vec::new();
     collect_manifests(dir, &mut found)?;
-    match found.len() {
-        0 => Err(FetchError::MissingManifest {
+    let Some(only) = found.pop() else {
+        return Err(FetchError::MissingManifest {
             dir: dir.display().to_string(),
-        }),
-        1 => Ok(found.pop().expect("length checked above")),
-        _ => Err(FetchError::AmbiguousManifest {
-            dir: dir.display().to_string(),
-            found: found.iter().map(|p| p.display().to_string()).collect(),
-        }),
+        });
+    };
+    if found.is_empty() {
+        return Ok(only);
     }
+    found.push(only);
+    Err(FetchError::AmbiguousManifest {
+        dir: dir.display().to_string(),
+        found: found.iter().map(|p| p.display().to_string()).collect(),
+    })
 }
 
 fn collect_manifests(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), FetchError> {

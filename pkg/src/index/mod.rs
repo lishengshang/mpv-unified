@@ -143,9 +143,11 @@ fn validate_name(name: &str) -> Result<(), IndexError> {
             format!("{name:?}: must be lowercase letters, digits, or hyphens"),
         ));
     }
-    let first = name.chars().next().expect("non-empty checked above");
-    let last = name.chars().next_back().expect("non-empty checked above");
-    if !first.is_ascii_alphanumeric() || !last.is_ascii_alphanumeric() {
+    let first = name.chars().next();
+    let last = name.chars().next_back();
+    if !matches!(first, Some(c) if c.is_ascii_alphanumeric())
+        || !matches!(last, Some(c) if c.is_ascii_alphanumeric())
+    {
         return Err(IndexError::new(
             "name",
             format!("{name:?}: must start and end with a letter or digit"),
@@ -159,7 +161,7 @@ fn validate_name(name: &str) -> Result<(), IndexError> {
 /// `api.github.com/repos/{owner}/{repo}`).
 fn validate_repo(repo: &str) -> Result<(), IndexError> {
     let mut parts = repo.split('/');
-    let owner = parts.next().expect("split always yields one part");
+    let owner = parts.next().unwrap_or_default();
     let name = parts.next().unwrap_or_default();
     let ok = !owner.is_empty()
         && !name.is_empty()

@@ -1,0 +1,4 @@
+# 语义等价验证白名单 (windows)
+# 生成结果 vs archive/mpv.conf.orig 的允许差异。
+# 当前拆分是逐行保真的,验证零差异通过;此处留白,未来拆分演进时如需放行
+# 某些差异,在此登记。格式同 equivalence-whitelist-linux.txt。

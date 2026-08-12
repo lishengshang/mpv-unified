@@ -12,5 +12,6 @@ scripts/webtorrent.js
 
 /target
 .omo/
-user/
+user/*
+!user/user.example.conf
 *.local.conf

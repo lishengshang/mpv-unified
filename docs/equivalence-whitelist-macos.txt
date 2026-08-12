@@ -1,0 +1,4 @@
+# 语义等价验证白名单 (macos)
+# macOS 平台层标记为 experimental(无真机素材,见计划 D 决策)。
+# macos.conf 尚未提供;生成结果与 archive/mpv.conf.orig 的对比预期差异
+# 较大(mac 平台特有选项),待 macos.conf 落地后再收敛白名单。

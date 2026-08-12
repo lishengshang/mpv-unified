@@ -41,7 +41,26 @@ fn synthetic_corpus_roundtrips() {
 }
 
 fn repo_mpv_conf_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../mpv.conf")
+    // Task 7 moved the 110KB Windows original into archive/mpv.conf.orig and
+    // rebuilt it as four-layer sources under config/; the round-trip contract
+    // now guards every layer file (they are what the generator consumes).
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../config/base.conf")
+}
+
+fn layer_mpv_conf_paths() -> Vec<(String, PathBuf)> {
+    // mpv.conf layers only. input.conf is not part of the Rust round-trip
+    // contract: it binds the bare `[` key, which the mpv.conf parser treats
+    // as a profile header. input.conf equivalence is verified by
+    // tools/verify-equivalence.sh instead.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    [
+        ("base.conf", "config/base.conf"),
+        ("windows.conf", "config/windows.conf"),
+        ("linux.conf", "config/linux.conf"),
+    ]
+    .into_iter()
+    .map(|(name, rel)| (name.to_owned(), root.join(rel)))
+    .collect()
 }
 
 fn live_mpv_conf_path() -> Option<PathBuf> {
@@ -67,11 +86,15 @@ fn assert_real_file_roundtrip(path: &Path) {
     );
 }
 
-/// The 110KB Windows-original config shipped in the repo root (1042 lines,
-/// `##` documentation blocks, indented profile bodies, no trailing newline).
+/// Every config-layer source file shipped in `config/` must round-trip
+/// byte-identically. The 110KB Windows original moved to archive/mpv.conf.orig
+/// in task 7 and is verified semantically by tools/verify-equivalence.sh.
 #[test]
 fn real_repo_mpv_conf_roundtrip() {
-    assert_real_file_roundtrip(&repo_mpv_conf_path());
+    for (name, path) in layer_mpv_conf_paths() {
+        eprintln!("roundtrip: {name}");
+        assert_real_file_roundtrip(&path);
+    }
 }
 
 /// The live 346-line Linux config. Absent on CI runners, so the test skips
@@ -90,34 +113,54 @@ fn real_live_mpv_conf_roundtrip() {
 
 #[test]
 fn real_repo_mpv_conf_structure_spot_checks() {
-    let text = fs::read_to_string(repo_mpv_conf_path()).unwrap();
-    let doc = parse(&text).unwrap();
+    let base_text = fs::read_to_string(repo_mpv_conf_path()).unwrap();
+    let base = parse(&base_text).unwrap();
     assert!(
-        doc.entries.len() > 1000,
-        "repo config should exceed 1000 lines"
+        base.entries.len() > 500,
+        "config/base.conf should exceed 500 lines"
     );
     assert!(
-        !doc.ends_with_newline,
-        "repo config is known to lack a trailing newline"
+        base.ends_with_newline,
+        "config/base.conf keeps the original's trailing newline state"
     );
     assert!(
-        matches!(&doc.entries[0], Entry::Comment { text } if text.starts_with("##⇘⇘")),
+        matches!(&base.entries[0], Entry::Comment { text } if text.starts_with("##⇘⇘")),
         "first line must stay a comment"
     );
     assert!(
-        doc.entries
+        !base
+            .entries
+            .iter()
+            .any(|e| matches!(e, Entry::ProfileStart { .. })),
+        "config/base.conf must be top-level only (profiles live in windows.conf)"
+    );
+    assert!(
+        base.entries.iter().any(|e| matches!(
+            e,
+            Entry::KeyValue { key, value, .. } if key == "vo" && value == "gpu-next"
+        )),
+        "top-level vo=gpu-next must be recognized"
+    );
+
+    // The 41 profile blocks moved to windows.conf (task 7 layout).
+    let win_text =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../config/windows.conf"))
+            .unwrap();
+    let win = parse(&win_text).unwrap();
+    assert!(
+        win.entries
             .iter()
             .any(|e| matches!(e, Entry::ProfileStart { name, .. } if name == "ICC")),
         "[ICC] profile header must be recognized"
     );
     assert!(
-        doc.entries
+        win.entries
             .iter()
             .any(|e| matches!(e, Entry::ProfileStart { name, .. } if name == "end")),
         "[end] profile header must be recognized"
     );
     assert!(
-        doc.entries.iter().any(|e| matches!(
+        win.entries.iter().any(|e| matches!(
             e,
             Entry::KeyValue { key, value, .. }
             if key == "profile-cond" && value.contains("path:find('://')")
@@ -125,7 +168,7 @@ fn real_repo_mpv_conf_structure_spot_checks() {
         "indented profile-cond line with apostrophes must parse as key/value"
     );
     assert!(
-        doc.entries
+        win.entries
             .iter()
             .any(|e| matches!(e, Entry::KeyValue { key, value, .. } if key == "icc-profile" && value == "\"\"")),
         "empty quoted value must survive"
@@ -133,8 +176,8 @@ fn real_repo_mpv_conf_structure_spot_checks() {
 }
 
 /// Only runs when `MPV_CONF_ROUNDTRIP_DUMP` points at a directory; writes the
-/// serialized bytes of both real files there so `sha256sum` can compare them
-/// against the originals (evidence collection).
+/// serialized bytes of every config layer there so `sha256sum` can compare
+/// them against the sources (evidence collection).
 #[test]
 fn dump_serialized_for_sha256_evidence() {
     let Some(dir) = std::env::var_os("MPV_CONF_ROUNDTRIP_DUMP") else {
@@ -142,16 +185,17 @@ fn dump_serialized_for_sha256_evidence() {
     };
     let dir = PathBuf::from(dir);
     fs::create_dir_all(&dir).unwrap();
-    let mut sources = vec![("repo-mpv.conf", repo_mpv_conf_path())];
+    let mut sources: Vec<(String, PathBuf)> = vec![("base.conf".to_owned(), repo_mpv_conf_path())];
+    sources.extend(layer_mpv_conf_paths());
     if let Some(live) = live_mpv_conf_path() {
         if live.exists() {
-            sources.push(("live-mpv.conf", live));
+            sources.push(("live-mpv.conf".to_string(), live));
         }
     }
     for (name, path) in sources {
         let text = fs::read_to_string(&path).unwrap();
         let serialized = serialize(&parse(&text).unwrap());
-        fs::write(dir.join(name), serialized).unwrap();
+        fs::write(dir.join(&name), serialized).unwrap();
         println!("dumped {name} from {}", path.display());
     }
 }

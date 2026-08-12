@@ -1,0 +1,11 @@
+# 语义等价验证白名单 (linux)
+# 生成结果 vs 现役 ~/.config/mpv/mpv.conf 的允许差异。
+# 当前拆分是逐行保真的,验证零差异通过;此处留白,未来拆分演进时如需放行
+# 某些差异,在此登记。格式:
+#   top:KEY              放行顶层选项 KEY 的任何差异
+#   profile:NAME         放行整个 profile 块
+#   profile:NAME:KEY     放行 profile 内单个选项
+#   bind:KEY             放行 input.conf 中按键 KEY 的绑定差异
+#   line:<report line>   放行一整条报告行
+#   *                    放行全部(不推荐)
+# 以 # 开头的行是注释。

@@ -12,6 +12,36 @@ PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为
 
 **mpv 整合包下载**：[Releases](https://github.com/dyphire/mpv-config/releases)
 
+### 跨平台配置源(`config/` 四层结构)
+
+> 本项目正在将单平台配置改造为"一份源 + 平台规则"的跨平台配置源。
+> Windows 原版(110KB)已备份至 `archive/mpv.conf.orig`,由下面的源文件体系替代。
+
+```
+config/
+├── base.conf               # 通用配置(绝大部分内容,注释 100% 保留)
+│                           #   含平台条件指令:#@if platform==windows ... #@else ... #@endif
+├── windows.conf            # Windows 差异:gpu-api=d3d11 类、d3d11-*/字体路径、便携模式
+├── linux.conf              # Linux 差异:gpu-api=vulkan、hwdec、Linux 路径
+├── input.conf              # 通用按键绑定(含视频滤镜/着色器两节平台条件指令)
+├── windows.input.conf      # Windows 差异按键(右键菜单、mpv_cropscreen 等)
+└── linux.input.conf        # Linux 差异按键(wl-paste 剪贴板、gather 着色器路径等)
+
+user/
+└── user.example.conf       # user 层模板(个人配置/API key 占位,无真实密钥;
+                            #   实体 user/user.conf 已被 gitignore,永不入库)
+
+tools/
+└── verify-equivalence.sh   # 语义等价验证:合并 base+平台层后与现役配置做
+                            #   选项级对比(顶层 + profile 内),差异落白名单则通过
+```
+
+- **层顺序**:`base` → `{platform}` → `package` → `user`,后层覆盖前层同名选项。
+- **生成**:`mpv-config gen --platform <linux|windows|macos>` 输出最终 `mpv.conf`(待 T6 落地)。
+- **验证**:`tools/verify-equivalence.sh linux`(对照现役 `~/.config/mpv/mpv.conf`)
+  或 `tools/verify-equivalence.sh windows`(对照 `archive/mpv.conf.orig`)。
+- **等价分析**:Windows 原版 vs Linux 移植版的逐条差异清单见 `docs/platform-diff.md`(待用户确认)。
+
 ### mpv 客户端
 
 - 目前 mpv 没有官方发布的客户端，官网上有放一些推荐的第三方编译版：[https://mpv.io/installation](https://mpv.io/installation)

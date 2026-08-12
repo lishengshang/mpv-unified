@@ -37,3 +37,6 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --check
+
+      - name: Validate tutorial docs structure
+        run: bash tools/check-tutorials.sh

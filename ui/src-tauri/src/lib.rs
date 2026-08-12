@@ -1,4 +1,5 @@
 mod commands;
+mod store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -8,6 +9,11 @@ pub fn run() {
             commands::get_profile_state,
             commands::set_profile_state,
             commands::regenerate,
+            store::list_packages,
+            store::update_index,
+            store::install_package,
+            store::uninstall_package,
+            store::update_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

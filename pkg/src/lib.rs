@@ -16,10 +16,14 @@
 //! - [`lock`]: the `packages.lock` document — schema, atomic read/write
 //!   (tmp + rename), and the [`lock::verify`]/[`lock::repair`] consistency
 //!   check between the lock and the repository files.
+//! - [`catalog`]: the store-page merge of lock + pending + local + index
+//!   sources into one sorted, status-annotated package list (consumed by
+//!   the T20 Tauri store page).
 //!
 //! Every failure is a typed error carrying the offending field or URL;
 //! nothing panics.
 
+pub mod catalog;
 pub mod deps;
 pub mod fetch;
 pub mod index;

@@ -1,0 +1,4 @@
+{
+  "_comment": "mpv-config 包索引示例(本地占位,供包商店页面浏览)。如何添加包:1) 在 packages/ 下放本地 manifest(package.yaml,字段见 pkg/src/manifest 或 packages/pending/ 的迁移产物);2) 或把包发布到 GitHub Releases(压缩包内含 package.yaml + 文件),在此登记 {name, repo, release_tag, homepage},然后运行 `mpv-config pkg update-index` 或点击包商店的「刷新索引」拉取;3) 从现役 mpv_manager 迁移:运行 `mpv-config pkg migrate-manager <path/to/manager.json>` 生成 packages/pending/*.yaml。",
+  "packages": []
+}

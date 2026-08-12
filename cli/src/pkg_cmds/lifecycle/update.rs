@@ -119,7 +119,20 @@ fn update_one(opts: &UpdateOptions, lock: &LockFile, name: &str) -> Result<Updat
     let installed_refs: Vec<&Manifest> = installed_manifests.iter().collect();
     let incoming = [new_manifest.as_ref()];
     deps::check_conflicts(&installed_refs, &incoming)?;
-    deps::check_file_conflicts(&lock.file_map(Some(name)), &new_manifest)?;
+    // `check_file_conflicts` compares `~~/`-prefixed dests (as the manifest
+    // stores them); the lock records stripped paths, so re-prefix here.
+    let installed_paths: std::collections::HashMap<String, Vec<String>> = lock
+        .file_map(Some(name))
+        .into_iter()
+        .map(|(pkg, paths)| {
+            let prefixed = paths
+                .iter()
+                .map(|path| format!("~~/{path}"))
+                .collect::<Vec<_>>();
+            (pkg, prefixed)
+        })
+        .collect();
+    deps::check_file_conflicts(&installed_paths, &new_manifest)?;
 
     let swap_dir = opts
         .repo_root

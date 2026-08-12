@@ -14,7 +14,7 @@
 //! exists is moved aside to a backup directory first — a mid-copy failure
 //! restores the backups and removes the freshly copied files.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -127,8 +127,20 @@ pub fn install(opts: &InstallOptions) -> Result<InstallOutcome> {
     let incoming = [&manifest];
     deps::check_conflicts(&installed_refs, &incoming)?;
 
-    deps::check_file_conflicts(&lock.file_map(None), &manifest)?;
-
+    // `check_file_conflicts` compares `~~/`-prefixed dests (as the manifest
+    // stores them); the lock records stripped paths, so re-prefix here.
+    let installed_paths: HashMap<String, Vec<String>> = lock
+        .file_map(None)
+        .into_iter()
+        .map(|(name, paths)| {
+            let prefixed = paths
+                .iter()
+                .map(|path| format!("~~/{path}"))
+                .collect::<Vec<_>>();
+            (name, prefixed)
+        })
+        .collect();
+    deps::check_file_conflicts(&installed_paths, &manifest)?;
     let (source_dir, source_kind) = resolved.source_and_kind(opts);
     let backup_dir = opts
         .repo_root

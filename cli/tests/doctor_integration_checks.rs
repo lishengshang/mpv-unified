@@ -131,6 +131,12 @@ fn profile_pseudo_options_do_not_warn() {
     assert_eq!(messages.len(), 1);
 }
 
+/// Whether a finding message names `rel`; matches both `/` separators
+/// (unix `Path::display()`) and the platform separator (Windows uses `\`).
+fn names_path(message: &str, rel: &str) -> bool {
+    message.contains(rel) || message.contains(&rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+}
+
 #[test]
 fn secret_file_in_user_dir_warns() {
     let dir = TestDir::new("secret-user");
@@ -146,7 +152,7 @@ fn secret_file_in_user_dir_warns() {
     assert!(
         messages
             .iter()
-            .any(|m| m.contains("user/keys.txt") && m.contains("sk-")),
+            .any(|m| names_path(m, "user/keys.txt") && m.contains("sk-")),
         "{messages:?}"
     );
     assert_eq!(report.exit_code(), 2);
@@ -167,7 +173,7 @@ fn secret_scan_covers_config_dir() {
     assert!(
         messages
             .iter()
-            .any(|m| m.contains("config/linux.conf") && m.contains("token")),
+            .any(|m| names_path(m, "config/linux.conf") && m.contains("token")),
         "{messages:?}"
     );
 }

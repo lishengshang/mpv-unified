@@ -9,3 +9,8 @@ files/
 playlists/
 
 scripts/webtorrent.js
+
+/target
+.omo/
+user/
+*.local.conf

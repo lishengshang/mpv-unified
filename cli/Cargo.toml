@@ -1,0 +1,10 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mpv-config"
+path = "src/main.rs"

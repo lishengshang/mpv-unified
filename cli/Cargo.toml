@@ -8,3 +8,7 @@ license.workspace = true
 [[bin]]
 name = "mpv-config"
 path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+core = { path = "../core" }

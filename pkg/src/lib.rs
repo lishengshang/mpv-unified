@@ -9,10 +9,15 @@
 //! - [`fetch`]: fetching the index and package archives from GitHub
 //!   Releases over the [`fetch::Fetcher`] abstraction, with validation
 //!   (manifest matches the index) and atomic cache writes.
+//! - [`deps`]: name-level dependency resolution (topological install order,
+//!   cycle and missing-dependency detection) and conflict detection
+//!   (`conflicts` exclusivity and dest-path overlap), consumed by the
+//!   installer before it touches the filesystem.
 //!
 //! Every failure is a typed error carrying the offending field or URL;
 //! nothing panics.
 
+pub mod deps;
 pub mod fetch;
 pub mod index;
 pub mod manifest;

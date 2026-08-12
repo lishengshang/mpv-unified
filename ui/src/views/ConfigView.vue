@@ -2,6 +2,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { RouterLink } from "vue-router";
 import { computed, onMounted, reactive, ref } from "vue";
+import { t } from "../i18n";
+import StatePanel from "../components/StatePanel.vue";
+import ToastStack from "../components/ToastStack.vue";
+import { useToasts } from "../composables/useToasts";
 
 /** One curated option, as serialized by core::options_gui::GuiOption. */
 interface GuiOption {
@@ -17,44 +21,37 @@ interface GuiOption {
   doc_url: string;
 }
 
-interface Toast {
-  id: number;
-  kind: "ok" | "err";
-  text: string;
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-  general: "通用",
-  video: "视频",
-  audio: "音频",
-  subtitle: "字幕",
-  performance: "性能",
-  network: "网络",
-  window: "窗口",
-  other: "其他",
-};
+const CATEGORY_LABELS = computed<Record<string, string>>(() => ({
+  general: t("config.catGeneral"),
+  video: t("config.catVideo"),
+  audio: t("config.catAudio"),
+  subtitle: t("config.catSubtitle"),
+  performance: t("config.catPerformance"),
+  network: t("config.catNetwork"),
+  window: t("config.catWindow"),
+  other: t("config.catOther"),
+}));
 
 const options = ref<GuiOption[]>([]);
 const loading = ref(true);
 const error = ref("");
 const busy = ref(false);
 const activeCategory = ref("");
-const toasts = ref<Toast[]>([]);
+const { toasts, toast } = useToasts();
 /** Complete form state: every option key → current value (all strings, mpv world). */
 const form = reactive<Record<string, string>>({});
 /** Snapshot of the last saved state, for dirty tracking. */
 let savedSnapshot = "";
-let toastSeq = 0;
 
 const categories = computed(() => {
   const counts = new Map<string, number>();
   for (const option of options.value) {
     counts.set(option.category, (counts.get(option.category) ?? 0) + 1);
   }
-  const order = Object.keys(CATEGORY_LABELS).filter((c) => counts.has(c));
+  const order = Object.keys(CATEGORY_LABELS.value).filter((c) => counts.has(c));
   return order.map((category) => ({
     category,
-    label: CATEGORY_LABELS[category],
+    label: CATEGORY_LABELS.value[category],
     count: counts.get(category) ?? 0,
   }));
 });
@@ -64,14 +61,6 @@ const activeOptions = computed(() =>
 );
 
 const dirty = computed(() => snapshot() !== savedSnapshot);
-
-function toast(kind: Toast["kind"], text: string) {
-  const id = ++toastSeq;
-  toasts.value.push({ id, kind, text });
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((t) => t.id !== id);
-  }, 3600);
-}
 
 function snapshot(): string {
   return JSON.stringify(
@@ -148,7 +137,7 @@ async function saveAndGenerate() {
     const summary = report.files
       .map((file) => `${file.path} (${file.line_count} 行)`)
       .join(", ");
-    toast("ok", `已保存并重新生成:${summary}`);
+    toast("ok", t("config.savedOk", { summary }));
   } catch (cause) {
     toast("err", String(cause));
   } finally {
@@ -161,7 +150,7 @@ async function resetOption(option: GuiOption) {
   try {
     await invoke("reset_gui_value", { key: option.key });
     savedSnapshot = snapshot();
-    toast("ok", `「${option.key}」已恢复默认`);
+    toast("ok", t("config.resetOk", { key: option.key }));
   } catch (cause) {
     toast("err", String(cause));
   }
@@ -174,34 +163,34 @@ onMounted(load);
   <section class="config">
     <header class="page-head">
       <div>
-        <h2>配置</h2>
-        <p class="sub">
-          精选常用选项(共 {{ options.length }} 项),保存时只把与默认不同的设置写入
-          user/gui.conf,不会覆盖手动编辑内容;gui.conf 优先级高于 user.conf。
-        </p>
+        <h2>{{ t("config.title") }}</h2>
+        <p class="sub">{{ t("config.subtitle", { n: options.length }) }}</p>
       </div>
       <div class="head-actions">
-        <RouterLink class="raw-link" to="/help">编辑原始文件 →</RouterLink>
+        <RouterLink class="raw-link" to="/help">{{ t("config.rawEdit") }}</RouterLink>
         <button
           class="apply"
           :disabled="busy || !dirty"
           @click="saveAndGenerate"
         >
-          {{ busy ? "处理中…" : "保存并生成" }}
+          {{ busy ? t("config.saving") : t("config.save") }}
         </button>
       </div>
     </header>
 
-    <div v-if="loading" class="state-panel">加载选项表中…</div>
+    <StatePanel v-if="loading" kind="loading" :message="t('config.loading')" />
 
-    <div v-else-if="error" class="state-panel error">
-      <p>配置加载失败</p>
-      <p class="detail">{{ error }}</p>
-      <button class="apply" @click="load">重试</button>
-    </div>
+    <StatePanel
+      v-else-if="error"
+      kind="error"
+      :message="t('config.loadFailed')"
+      :detail="error"
+      show-retry
+      @retry="load"
+    />
 
     <div v-else class="config-layout">
-      <aside class="cat-tree" aria-label="选项章节">
+      <aside class="cat-tree" :aria-label="t('config.title')">
         <button
           v-for="item in categories"
           :key="item.category"
@@ -224,20 +213,20 @@ onMounted(load);
                 :href="option.doc_url"
                 target="_blank"
                 rel="noreferrer"
-                title="mpv 手册"
-                >手册 ↗</a
+                :title="t('config.manualTitle')"
+                >{{ t("config.manualLink") }}</a
               >
             </div>
             <p class="desc-zh">{{ option.desc_zh }}</p>
             <p class="desc-en">{{ option.desc_en }}</p>
             <p class="default">
-              默认:{{ option.default }}
+              {{ t("config.defaultLabel", { value: option.default }) }}
               <button
                 class="reset"
                 :disabled="form[option.key] === option.default"
                 @click="resetOption(option)"
               >
-                恢复默认
+                {{ t("config.reset") }}
               </button>
             </p>
           </div>
@@ -256,7 +245,7 @@ onMounted(load);
               />
               <span class="toggle-track" aria-hidden="true" />
               <span class="toggle-state">{{
-                form[option.key] === "yes" ? "开" : "关"
+                form[option.key] === "yes" ? t("config.on") : t("config.off")
               }}</span>
             </label>
 
@@ -297,19 +286,19 @@ onMounted(load);
             />
           </div>
         </div>
-        <p v-if="activeOptions.length === 0" class="state-panel">该章节暂无选项。</p>
+        <StatePanel
+          v-if="activeOptions.length === 0"
+          kind="empty"
+          :message="t('config.emptyCategory')"
+        />
       </div>
     </div>
 
     <p v-if="!loading && !error && dirty" class="dirty-hint">
-      有未保存的修改,保存后写入 user/gui.conf。
+      {{ t("config.dirtyHint") }}
     </p>
 
-    <div class="toasts" aria-live="polite">
-      <div v-for="t in toasts" :key="t.id" class="toast" :class="t.kind">
-        {{ t.text }}
-      </div>
-    </div>
+    <ToastStack :toasts="toasts" />
   </section>
 </template>
 
@@ -636,67 +625,5 @@ select:focus,
   background-color: var(--accent-soft);
   color: var(--text-muted);
   font-size: 13px;
-}
-
-.state-panel {
-  padding: 32px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-card);
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.state-panel.error p:first-child {
-  margin: 0 0 8px;
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.state-panel.error .detail {
-  margin: 0 0 16px;
-  font-size: 13px;
-}
-
-.toasts {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 100;
-}
-
-.toast {
-  max-width: 420px;
-  padding: 11px 16px;
-  border-radius: var(--radius-control);
-  background-color: var(--surface-hover);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  font-size: 13px;
-  line-height: 1.5;
-  animation: toast-in 0.2s ease;
-}
-
-.toast.ok {
-  border-color: rgba(76, 195, 138, 0.5);
-  color: var(--ok);
-}
-
-.toast.err {
-  border-color: rgba(229, 115, 115, 0.5);
-  color: var(--danger);
-}
-
-@keyframes toast-in {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 </style>

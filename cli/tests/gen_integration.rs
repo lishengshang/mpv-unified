@@ -464,8 +464,11 @@ fn gen_appends_enabled_profile_blocks_to_mpv_conf() {
     .expect("generation with profiles succeeds");
 
     assert!(
-        report.warnings.iter().all(|w| !w.contains("方案")),
-        "no profile warnings on the happy path: {:?}",
+        report
+            .warnings
+            .iter()
+            .all(|w| !w.contains("方案块")),
+        "no profile-block warnings on the happy path: {:?}",
         report.warnings
     );
     let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
@@ -513,7 +516,10 @@ fn gen_defaults_to_cinema_profile_when_state_is_missing() {
         "gen reads state but must not write it"
     );
     assert!(
-        report.warnings.iter().all(|w| !w.contains("方案")),
+        report
+            .warnings
+            .iter()
+            .all(|w| !w.contains("方案块")),
         "{:?}",
         report.warnings
     );
@@ -583,6 +589,118 @@ fn missing_profiles_yaml_is_skipped_silently() {
         "missing profiles.yaml must not warn: {:?}",
         report.warnings
     );
+}
+
+#[test]
+fn gen_emits_uosc_menu_patch_and_input_lines_when_uosc_installed() {
+    let root = minimal_root("uosc-installed", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
+    );
+    write(&root.path().join("user/profiles-state.json"), "[\"cinema\"]\n");
+    write(&root.path().join("scripts/uosc/main.lua"), "-- uosc\n");
+    write(
+        &root.path().join("script-opts/uosc.conf"),
+        "timeline_style=bar\n",
+    );
+    let out = TestDir::new("uosc-installed-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation with uosc installed succeeds");
+
+    assert!(
+        report
+            .warnings
+            .iter()
+            .all(|w| !w.contains("未检测到 uosc")),
+        "no uosc warnings on the happy path: {:?}",
+        report.warnings
+    );
+    assert!(
+        report
+            .files
+            .iter()
+            .any(|f| f.path.ends_with("script-opts/uosc.conf")),
+        "uosc patch file must be reported: {:?}",
+        report.files
+    );
+    // The repo's own uosc.conf is preserved with the patch appended.
+    let uosc_conf =
+        fs::read_to_string(out.path().join("dist/script-opts/uosc.conf")).expect("read patch");
+    assert!(uosc_conf.starts_with("timeline_style=bar\n"), "{uosc_conf}");
+    assert!(uosc_conf.contains("uosc 方案切换菜单补丁"), "{uosc_conf}");
+    assert!(
+        uosc_conf.contains("#  apply-profile cinema  #menu: 方案 > 高清观影"),
+        "{uosc_conf}"
+    );
+    // The operative menu lines reach the generated input.conf.
+    let input = fs::read_to_string(out.path().join("dist/input.conf")).expect("read input output");
+    assert!(input.contains("apply-profile cinema"), "{input}");
+    assert!(input.contains("#menu: 方案 > 高清观影"), "{input}");
+}
+
+#[test]
+fn gen_warns_and_skips_uosc_patch_when_uosc_missing() {
+    let root = minimal_root("uosc-missing", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
+    );
+    write(&root.path().join("user/profiles-state.json"), "[\"cinema\"]\n");
+    write(&root.path().join("config/input.conf"), "A cycle audio\n");
+    let out = TestDir::new("uosc-missing-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation without uosc still succeeds");
+
+    assert!(
+        report.warnings.iter().any(|w| w.contains("未检测到 uosc")),
+        "{:?}",
+        report.warnings
+    );
+    assert!(
+        !out.path().join("dist/script-opts/uosc.conf").exists(),
+        "no patch file when uosc is absent"
+    );
+    let input = fs::read_to_string(out.path().join("dist/input.conf")).expect("read input output");
+    assert!(!input.contains("apply-profile"), "{input}");
+}
+
+#[test]
+fn gen_does_not_emit_uosc_patch_when_all_profiles_disabled() {
+    let root = minimal_root("uosc-disabled", "volume=50\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("config/profiles.yaml"),
+        "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
+    );
+    write(&root.path().join("user/profiles-state.json"), "[]\n");
+    write(&root.path().join("scripts/uosc/main.lua"), "-- uosc\n");
+    write(&root.path().join("config/input.conf"), "A cycle audio\n");
+    let out = TestDir::new("uosc-disabled-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation with empty state succeeds");
+
+    assert!(
+        report
+            .files
+            .iter()
+            .all(|f| !f.path.ends_with("script-opts/uosc.conf")),
+        "{:?}",
+        report.files
+    );
+    let input = fs::read_to_string(out.path().join("dist/input.conf")).expect("read input output");
+    assert!(!input.contains("apply-profile"), "{input}");
 }
 
 #[test]

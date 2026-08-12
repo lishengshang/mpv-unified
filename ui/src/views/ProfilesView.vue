@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, ref } from "vue";
+import { t } from "../i18n";
+import StatePanel from "../components/StatePanel.vue";
+import ToastStack from "../components/ToastStack.vue";
+import { useToasts } from "../composables/useToasts";
 
 interface ProfileInfo {
   id: string;
@@ -22,30 +26,15 @@ interface RegenSummary {
   warnings: string[];
 }
 
-interface Toast {
-  id: number;
-  kind: "ok" | "err";
-  text: string;
-}
-
 const profiles = ref<ProfileInfo[]>([]);
 const enabled = ref<Set<string>>(new Set());
 const loading = ref(true);
 const error = ref("");
 const busy = ref(false);
-const toasts = ref<Toast[]>([]);
 const summary = ref("");
-let toastSeq = 0;
+const { toasts, toast } = useToasts();
 
 const enabledCount = computed(() => enabled.value.size);
-
-function toast(kind: Toast["kind"], text: string) {
-  const id = ++toastSeq;
-  toasts.value.push({ id, kind, text });
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((t) => t.id !== id);
-  }, 3600);
-}
 
 async function load() {
   loading.value = true;
@@ -66,7 +55,13 @@ async function load() {
 
 async function toggle(profile: ProfileInfo) {
   if (!profile.requires_met) {
-    toast("err", `「${profile.name}」缺少依赖:${profile.requires.join("、")},请先到包商店安装`);
+    toast(
+      "err",
+      t("profiles.missingDep", {
+        name: profile.name,
+        deps: profile.requires.join("、"),
+      }),
+    );
     return;
   }
   const next = new Set(enabled.value);
@@ -88,9 +83,9 @@ async function regenerate() {
   try {
     const report = await invoke<RegenSummary>("regenerate");
     summary.value = report.files
-      .map((f) => `${f.path} (${f.line_count} 行)`)
+      .map((file) => `${file.path} (${file.line_count} 行)`)
       .join(", ");
-    toast("ok", `已重新生成配置:${summary.value}`);
+    toast("ok", t("profiles.regenOk", { summary: summary.value }));
     for (const warning of report.warnings) {
       toast("err", warning);
     }
@@ -101,6 +96,13 @@ async function regenerate() {
   }
 }
 
+function onCardKeydown(event: KeyboardEvent, profile: ProfileInfo) {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    toggle(profile);
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -108,29 +110,29 @@ onMounted(load);
   <section class="profiles">
     <header class="page-head">
       <div>
-        <h2>方案</h2>
-        <p class="sub">
-          点击卡片启用/停用预设方案(可多选),方案作为独立 profile 块写入生成的
-          mpv.conf,不会改动你的手动配置。
-        </p>
+        <h2>{{ t("profiles.title") }}</h2>
+        <p class="sub">{{ t("profiles.subtitle") }}</p>
       </div>
       <div class="head-actions">
-        <span class="count">{{ enabledCount }} 个已启用</span>
+        <span class="count">{{ t("profiles.enabledCount", { n: enabledCount }) }}</span>
         <button class="apply" :disabled="busy" @click="regenerate">
-          {{ busy ? "生成中…" : "应用并生成" }}
+          {{ busy ? t("profiles.generating") : t("profiles.apply") }}
         </button>
       </div>
     </header>
 
-    <p v-if="summary" class="summary">上次生成:{{ summary }}</p>
+    <p v-if="summary" class="summary">{{ t("profiles.lastGen", { text: summary }) }}</p>
 
-    <div v-if="loading" class="state-panel">加载方案中…</div>
+    <StatePanel v-if="loading" kind="loading" :message="t('profiles.loading')" />
 
-    <div v-else-if="error" class="state-panel error">
-      <p>方案加载失败</p>
-      <p class="detail">{{ error }}</p>
-      <button class="apply" @click="load">重试</button>
-    </div>
+    <StatePanel
+      v-else-if="error"
+      kind="error"
+      :message="t('profiles.loadFailed')"
+      :detail="error"
+      show-retry
+      @retry="load"
+    />
 
     <div v-else class="grid">
       <article
@@ -142,8 +144,10 @@ onMounted(load);
           blocked: !profile.requires_met,
         }"
         role="button"
+        tabindex="0"
         :aria-pressed="enabled.has(profile.id)"
         @click="toggle(profile)"
+        @keydown="onCardKeydown($event, profile)"
       >
         <div class="icon" :aria-hidden="true">{{ profile.icon }}</div>
         <div class="body">
@@ -153,25 +157,27 @@ onMounted(load);
             {{ profile.options.join(" · ") }}
           </p>
         </div>
-        <span v-if="!profile.requires_met" class="badge missing">缺依赖</span>
-        <span v-else-if="enabled.has(profile.id)" class="badge on">已启用</span>
+        <span v-if="!profile.requires_met" class="badge missing">
+          {{ t("profiles.missingBadge") }}
+        </span>
+        <span v-else-if="enabled.has(profile.id)" class="badge on">
+          {{ t("profiles.enabledBadge") }}
+        </span>
       </article>
     </div>
 
-    <div v-if="!loading && !error && profiles.length === 0" class="state-panel">
-      未找到方案定义(config/profiles.yaml)。
-    </div>
+    <StatePanel
+      v-if="!loading && !error && profiles.length === 0"
+      kind="empty"
+      :message="t('profiles.empty')"
+      :detail="t('profiles.emptyHint')"
+    />
 
-    <div class="toasts" aria-live="polite">
-      <div
-        v-for="t in toasts"
-        :key="t.id"
-        class="toast"
-        :class="t.kind"
-      >
-        {{ t.text }}
-      </div>
-    </div>
+    <p v-if="!loading && !error && profiles.length > 0" class="uosc-note">
+      {{ t("profiles.uoscMenuNote") }}
+    </p>
+
+    <ToastStack :toasts="toasts" />
   </section>
 </template>
 
@@ -242,6 +248,17 @@ h2 {
   background-color: var(--accent-soft);
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.uosc-note {
+  margin: 18px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background-color: rgba(76, 195, 138, 0.08);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .grid {
@@ -335,67 +352,5 @@ h2 {
 .badge.missing {
   background-color: rgba(224, 180, 92, 0.16);
   color: var(--warn);
-}
-
-.state-panel {
-  padding: 32px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-card);
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.state-panel.error p:first-child {
-  margin: 0 0 8px;
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.state-panel.error .detail {
-  margin: 0 0 16px;
-  font-size: 13px;
-}
-
-.toasts {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 100;
-}
-
-.toast {
-  max-width: 420px;
-  padding: 11px 16px;
-  border-radius: var(--radius-control);
-  background-color: var(--surface-hover);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  font-size: 13px;
-  line-height: 1.5;
-  animation: toast-in 0.2s ease;
-}
-
-.toast.ok {
-  border-color: rgba(76, 195, 138, 0.5);
-  color: var(--ok);
-}
-
-.toast.err {
-  border-color: rgba(229, 115, 115, 0.5);
-  color: var(--danger);
-}
-
-@keyframes toast-in {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 </style>

@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from "vue-router";
+import { computed } from "vue";
+import { t, toggleLocale } from "./i18n";
 
-const navItems = [
-  { to: "/profiles", label: "方案" },
-  { to: "/config", label: "配置" },
-  { to: "/store", label: "包商店" },
-  { to: "/help", label: "帮助" },
-] as const;
+const navItems = computed(() => [
+  { to: "/profiles", label: t("nav.profiles") },
+  { to: "/config", label: t("nav.config") },
+  { to: "/store", label: t("nav.store") },
+  { to: "/help", label: t("nav.help") },
+]);
 </script>
 
 <template>
   <div class="shell">
     <aside class="sidebar">
       <h1 class="brand">mpv-config</h1>
-      <nav>
+      <nav aria-label="main">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"
@@ -24,9 +26,23 @@ const navItems = [
         </RouterLink>
       </nav>
     </aside>
-    <main class="content">
-      <RouterView />
-    </main>
+    <div class="main-col">
+      <header class="topbar">
+        <span class="topbar-spacer" />
+        <button
+          class="lang-toggle"
+          type="button"
+          :title="t('app.langTitle')"
+          :aria-label="t('app.langTitle')"
+          @click="toggleLocale"
+        >
+          {{ t("app.langToggle") }}
+        </button>
+      </header>
+      <main class="content">
+        <RouterView />
+      </main>
+    </div>
   </div>
 </template>
 
@@ -57,6 +73,14 @@ const navItems = [
 
 body {
   margin: 0;
+}
+
+/* 键盘导航(任务 23):所有可交互元素聚焦时必须有可见焦点环 */
+:where(button, a, input, select, textarea, [role="button"], [role="tab"])
+  :focus-visible,
+:where(button, a, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .shell {
@@ -102,9 +126,43 @@ nav {
   color: #ffffff;
 }
 
+.main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 10px 24px;
+  border-bottom: 1px solid #33373f;
+}
+
+.topbar-spacer {
+  flex: 1;
+}
+
+.lang-toggle {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.lang-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .content {
   flex: 1;
-  padding: 32px 40px;
+  padding: 24px 40px 32px;
   overflow-y: auto;
 }
 </style>

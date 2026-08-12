@@ -14,7 +14,6 @@ pub fn run() {
             commands::get_gui_values,
             commands::save_gui_values,
             commands::reset_gui_value,
-            commands::list_tutorials,
             commands::uosc_status,
             store::list_packages,
             store::update_index,

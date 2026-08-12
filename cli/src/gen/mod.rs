@@ -175,16 +175,36 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     // 末尾。profiles.yaml 缺失时静默跳过;损坏或状态读取失败时警告并跳过
     // (方案是可选增强,不阻断核心生成流程)。
     let mut mpv_text = serialize(&merged);
-    if let Some(blocks) = profile_blocks(root, &mut warnings)? {
-        if !mpv_text.ends_with('\n') {
-            mpv_text.push('\n');
+    let mut files = Vec::new();
+    // uosc 菜单补丁(任务 23):启用方案 ≥1 时,若检测到 uosc,生成
+    // dist/script-opts/uosc.conf 补丁并把菜单项追加到 input.conf。
+    let mut uosc_menu_lines: Option<String> = None;
+    if let Some((profiles, enabled_ids)) = profile_blocks(root, &mut warnings)? {
+        if !enabled_ids.is_empty() {
+            let blocks = core::profiles::generate_profile_blocks(&profiles, &enabled_ids);
+            if !blocks.is_empty() {
+                if !mpv_text.ends_with('\n') {
+                    mpv_text.push('\n');
+                }
+                mpv_text.push_str(&blocks);
+                uosc_menu_lines = uosc_patch(root, options, &profiles, &enabled_ids, &mut warnings, &mut files)?;
+            }
         }
-        mpv_text.push_str(&blocks);
     }
 
-    let mut files = Vec::new();
     write_output(options, "mpv.conf", &mpv_text, &mut files)?;
-    if let Some(input) = build_input(root, platform)? {
+    if let Some(menu_lines) = uosc_menu_lines {
+        let mut text = build_input(root, platform)?.unwrap_or_default();
+        if !text.is_empty() && !text.ends_with('\n') {
+            text.push('\n');
+        }
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("# ===== uosc 方案切换菜单(由 mpv-config 生成,任务 23) =====\n");
+        text.push_str(&menu_lines);
+        write_output(options, "input.conf", &text, &mut files)?;
+    } else if let Some(input) = build_input(root, platform)? {
         write_output(options, "input.conf", &input, &mut files)?;
     }
 
@@ -195,15 +215,22 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     })
 }
 
-/// Render the profile blocks for the enabled profiles, if any.
+/// The loaded profile definitions plus the enabled ids, as returned by
+/// [`profile_blocks`].
+type ProfileBundle = (Vec<core::profiles::Profile>, Vec<String>);
+
+/// Load the profile definitions and the enabled set, when profile rendering
+/// is possible at all.
 ///
 /// Reads `config/profiles.yaml` plus the enabled set from
 /// `user/profiles-state.json` (first run defaults to `[cinema]`, via
-/// [`core::profiles::effective_enabled`]) and returns the block text to
-/// append to `mpv.conf`. A missing profiles file yields `None` silently;
-/// a broken file or unreadable state yields a warning plus `None` — the
-/// optional enhancement never blocks generation.
-fn profile_blocks(root: &Path, warnings: &mut Vec<String>) -> Result<Option<String>, GenError> {
+/// [`core::profiles::effective_enabled`]). A missing profiles file yields
+/// `None` silently; a broken file or unreadable state yields a warning plus
+/// `None` — the optional enhancement never blocks generation.
+fn profile_blocks(
+    root: &Path,
+    warnings: &mut Vec<String>,
+) -> Result<Option<ProfileBundle>, GenError> {
     let yaml_path = root.join("config/profiles.yaml");
     let raw = match fs::read_to_string(&yaml_path) {
         Ok(raw) => raw,
@@ -234,14 +261,48 @@ fn profile_blocks(root: &Path, warnings: &mut Vec<String>) -> Result<Option<Stri
             return Ok(None);
         }
     };
-    if enabled.is_empty() {
+    Ok(Some((profiles, enabled)))
+}
+
+/// Emit the uosc menu patch when uosc is installed: writes
+/// `dist/script-opts/uosc.conf` (the repository's own `uosc.conf`, when
+/// present, with the patch appended — never clobbered) and returns the
+/// operative menu lines for `input.conf`. When uosc is absent, warns and
+/// returns `None` — the integration degrades gracefully, never errors.
+fn uosc_patch(
+    root: &Path,
+    options: &GenOptions,
+    profiles: &[core::profiles::Profile],
+    enabled_ids: &[String],
+    warnings: &mut Vec<String>,
+    files: &mut Vec<GeneratedFile>,
+) -> Result<Option<String>, GenError> {
+    if !core::uosc::detect_installed(&root.join("scripts")) {
+        warnings.push(
+            "未检测到 uosc(scripts/uosc.lua 或 scripts/uosc/main.lua 不存在),已跳过 uosc 方案切换菜单;安装 uosc 后重新生成即可。".to_owned(),
+        );
         return Ok(None);
     }
-    let blocks = core::profiles::generate_profile_blocks(&profiles, &enabled);
-    if blocks.is_empty() {
-        return Ok(None);
+    let patch = core::uosc::generate_uosc_conf(profiles, enabled_ids);
+    let mut body = String::new();
+    match fs::read_to_string(root.join("script-opts/uosc.conf")) {
+        Ok(existing) => {
+            body.push_str(&existing);
+            if !body.ends_with('\n') {
+                body.push('\n');
+            }
+            body.push('\n');
+        }
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+        Err(source) => {
+            warnings.push(format!(
+                "读取 script-opts/uosc.conf 失败,仅输出补丁内容:{source}"
+            ));
+        }
     }
-    Ok(Some(blocks))
+    body.push_str(&patch);
+    write_output(options, "script-opts/uosc.conf", &body, files)?;
+    Ok(Some(core::uosc::generate_menu_lines(profiles, enabled_ids)))
 }
 
 /// Write (or, in dry-run mode, only plan) one output file into `options.out`.
@@ -253,9 +314,10 @@ fn write_output(
 ) -> Result<(), GenError> {
     let path = options.out.join(name);
     if !options.dry_run {
-        fs::create_dir_all(&options.out).map_err(|source| GenError::Io {
+        let parent = path.parent().expect("output path has a parent");
+        fs::create_dir_all(parent).map_err(|source| GenError::Io {
             action: "创建输出目录",
-            path: options.out.clone(),
+            path: parent.to_path_buf(),
             source,
         })?;
         fs::write(&path, text).map_err(|source| GenError::Io {

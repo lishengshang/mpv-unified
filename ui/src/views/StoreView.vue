@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { computed, onMounted, ref } from "vue";
+import { t } from "../i18n";
+import StatePanel from "../components/StatePanel.vue";
+import ToastStack from "../components/ToastStack.vue";
+import { useToasts } from "../composables/useToasts";
 
 type Status = "Available" | "Installed" | "Updatable" | "Pending";
 
@@ -24,28 +28,21 @@ interface ActionResult {
 
 type Filter = "all" | "installed" | "updatable" | "pending";
 
-interface Toast {
-  id: number;
-  kind: "ok" | "err";
-  text: string;
-}
-
 const packages = ref<StoreEntry[]>([]);
 const loading = ref(true);
 const error = ref("");
 const query = ref("");
 const filter = ref<Filter>("all");
 const busy = ref("");
-const toasts = ref<Toast[]>([]);
 const regenHint = ref("");
-let toastSeq = 0;
+const { toasts, toast } = useToasts(4200);
 
-const filters: { key: Filter; label: string }[] = [
-  { key: "all", label: "全部" },
-  { key: "installed", label: "已安装" },
-  { key: "updatable", label: "可更新" },
-  { key: "pending", label: "pending" },
-];
+const filters = computed<{ key: Filter; label: string }[]>(() => [
+  { key: "all", label: t("store.filters.all") },
+  { key: "installed", label: t("store.filters.installed") },
+  { key: "updatable", label: t("store.filters.updatable") },
+  { key: "pending", label: t("store.filters.pending") },
+]);
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
@@ -67,34 +64,28 @@ const filtered = computed(() => {
   });
 });
 
-function toast(kind: Toast["kind"], text: string) {
-  const id = ++toastSeq;
-  toasts.value.push({ id, kind, text });
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((t) => t.id !== id);
-  }, 4200);
-}
-
 function badgeText(pkg: StoreEntry): string {
   switch (pkg.status) {
     case "Available":
-      return "未安装";
+      return t("store.status.available");
     case "Installed":
-      return `已装 v${pkg.installed_version}`;
+      return t("store.status.installed", { version: pkg.installed_version ?? "" });
     case "Updatable":
-      return "可更新";
+      return t("store.status.updatable");
     case "Pending":
-      return "pending git";
+      return t("store.status.pending");
   }
 }
 
 function versionLine(pkg: StoreEntry): string {
   if (pkg.status === "Updatable") {
-    const next = pkg.available_version ?? "git";
-    return `v${pkg.installed_version} → ${next}`;
+    return t("store.versionUpdatable", {
+      installed: pkg.installed_version ?? "?",
+      next: pkg.available_version ?? "git",
+    });
   }
-  if (pkg.installed_version) return `v${pkg.installed_version}`;
-  if (pkg.available_version) return `待装 ${pkg.available_version}`;
+  if (pkg.installed_version) return t("store.versionInstalled", { version: pkg.installed_version });
+  if (pkg.available_version) return t("store.versionPending", { version: pkg.available_version });
   return "—";
 }
 
@@ -114,10 +105,10 @@ async function refreshIndex() {
   busy.value = "index";
   try {
     const path = await invoke<string>("update_index");
-    toast("ok", `索引已更新并校验通过:${path}`);
+    toast("ok", t("store.indexUpdated", { path }));
     await load();
   } catch (cause) {
-    toast("err", `索引更新失败:${cause}`);
+    toast("err", t("store.indexFailed", { error: String(cause) }));
   } finally {
     busy.value = "";
   }
@@ -127,12 +118,12 @@ async function install(name: string) {
   busy.value = name;
   try {
     const result = await invoke<ActionResult>("install_package", { name });
-    toast("ok", result.message);
+    toast("ok", t("store.installOk", { message: result.message }));
     for (const warning of result.warnings) toast("err", warning);
-    regenHint.value = `已安装「${name}」,请到「方案」页点击「应用并生成」重新生成配置使其生效。`;
+    regenHint.value = t("store.regenHintInstall", { name });
     await load();
   } catch (cause) {
-    toast("err", `安装失败:${cause}`);
+    toast("err", t("store.installFailed", { error: String(cause) }));
   } finally {
     busy.value = "";
   }
@@ -145,7 +136,7 @@ async function uninstall(name: string) {
     toast("ok", result.message);
     await load();
   } catch (cause) {
-    toast("err", `卸载失败:${cause}`);
+    toast("err", t("store.uninstallFailed", { error: String(cause) }));
   } finally {
     busy.value = "";
   }
@@ -158,11 +149,11 @@ async function update(name: string) {
     toast("ok", result.message);
     for (const warning of result.warnings) toast("err", warning);
     if (result.message.includes("已更新")) {
-      regenHint.value = `已更新「${name}」,请到「方案」页重新生成配置使其生效。`;
+      regenHint.value = t("store.regenHintUpdate", { name });
     }
     await load();
   } catch (cause) {
-    toast("err", `更新失败:${cause}`);
+    toast("err", t("store.updateFailed", { error: String(cause) }));
   } finally {
     busy.value = "";
   }
@@ -179,32 +170,29 @@ onMounted(load);
   <section class="store">
     <header class="page-head">
       <div>
-        <h2>包商店</h2>
-        <p class="sub">
-          浏览、搜索并安装社区脚本与着色器包。安装与卸载直接调用本机包管理器,
-          冲突与依赖会在安装前校验,不会写入现役 mpv 配置目录。
-        </p>
+        <h2>{{ t("store.title") }}</h2>
+        <p class="sub">{{ t("store.subtitle") }}</p>
       </div>
       <div class="head-actions">
         <input
           v-model="query"
           class="search"
           type="search"
-          placeholder="搜索包名称 / 描述…"
-          aria-label="搜索包"
+          :placeholder="t('store.searchPlaceholder')"
+          :aria-label="t('store.searchAria')"
         />
         <button
           class="apply"
           :disabled="busy !== ''"
           @click="refreshIndex"
         >
-          {{ busy === "index" ? "刷新中…" : "刷新索引" }}
+          {{ busy === "index" ? t("store.refreshing") : t("store.refresh") }}
         </button>
       </div>
     </header>
 
     <div class="toolbar">
-      <div class="filters" role="tablist" aria-label="状态筛选">
+      <div class="filters" role="tablist" :aria-label="t('store.filterAria')">
         <button
           v-for="item in filters"
           :key="item.key"
@@ -217,24 +205,27 @@ onMounted(load);
           {{ item.label }}
         </button>
       </div>
-      <span class="count">{{ filtered.length }} / {{ packages.length }} 个包</span>
+      <span class="count">{{ t("store.count", { shown: filtered.length, total: packages.length }) }}</span>
     </div>
 
     <p v-if="regenHint" class="hint">{{ regenHint }}</p>
 
-    <div v-if="loading" class="state-panel">加载包清单中…</div>
+    <StatePanel v-if="loading" kind="loading" :message="t('store.loading')" />
 
-    <div v-else-if="error" class="state-panel error">
-      <p>包清单加载失败</p>
-      <p class="detail">{{ error }}</p>
-      <button class="apply" @click="load">重试</button>
-    </div>
+    <StatePanel
+      v-else-if="error"
+      kind="error"
+      :message="t('store.loadFailed')"
+      :detail="error"
+      show-retry
+      @retry="load"
+    />
 
-    <div v-else-if="filtered.length === 0" class="state-panel">
-      没有符合条件的包<span v-if="packages.length === 0">
-        。点击「刷新索引」从 GitHub Releases 拉取最新包索引。</span
-      >
-    </div>
+    <StatePanel
+      v-else-if="filtered.length === 0"
+      kind="empty"
+      :message="packages.length === 0 ? t('store.emptyIndex') : t('store.empty')"
+    />
 
     <ul v-else class="list">
       <li v-for="pkg in filtered" :key="pkg.name" class="row">
@@ -243,11 +234,11 @@ onMounted(load);
             <h3>{{ pkg.name }}</h3>
             <span class="badge" :class="pkg.status">{{ badgeText(pkg) }}</span>
           </div>
-          <p class="desc">{{ pkg.description || "（无描述）" }}</p>
+          <p class="desc">{{ pkg.description || t("store.noDesc") }}</p>
           <p class="meta">
             {{ versionLine(pkg) }}
-            <template v-if="pkg.file_count"> · {{ pkg.file_count }} 个文件</template>
-            <template v-if="pkg.repo"> · 来源:{{ pkg.repo }}</template>
+            <template v-if="pkg.file_count"> · {{ t("store.fileCount", { n: pkg.file_count }) }}</template>
+            <template v-if="pkg.repo"> · {{ t("store.source", { repo: pkg.repo }) }}</template>
           </p>
         </div>
         <div class="actions">
@@ -257,14 +248,14 @@ onMounted(load);
               :disabled="busyOn(pkg)"
               @click="update(pkg.name)"
             >
-              {{ busy === pkg.name ? "处理中…" : "更新" }}
+              {{ busy === pkg.name ? t("store.busy") : t("store.update") }}
             </button>
             <button
               class="ghost danger"
               :disabled="busyOn(pkg)"
               @click="uninstall(pkg.name)"
             >
-              {{ busy === pkg.name ? "处理中…" : "卸载" }}
+              {{ busy === pkg.name ? t("store.busy") : t("store.uninstall") }}
             </button>
           </template>
           <button
@@ -273,17 +264,19 @@ onMounted(load);
             :disabled="busyOn(pkg)"
             @click="install(pkg.name)"
           >
-            {{ busy === pkg.name ? "处理中…" : pkg.status === "Pending" ? "安装(克隆)" : "安装" }}
+            {{
+              busy === pkg.name
+                ? t("store.busy")
+                : pkg.status === "Pending"
+                  ? t("store.installClone")
+                  : t("store.install")
+            }}
           </button>
         </div>
       </li>
     </ul>
 
-    <div class="toasts" aria-live="polite">
-      <div v-for="t in toasts" :key="t.id" class="toast" :class="t.kind">
-        {{ t.text }}
-      </div>
-    </div>
+    <ToastStack :toasts="toasts" />
   </section>
 </template>
 
@@ -528,67 +521,5 @@ h2 {
 .ghost:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.state-panel {
-  padding: 32px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-card);
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.state-panel.error p:first-child {
-  margin: 0 0 8px;
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.state-panel.error .detail {
-  margin: 0 0 16px;
-  font-size: 13px;
-}
-
-.toasts {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 100;
-}
-
-.toast {
-  max-width: 460px;
-  padding: 11px 16px;
-  border-radius: var(--radius-control);
-  background-color: var(--surface-hover);
-  border: 1px solid var(--border);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  font-size: 13px;
-  line-height: 1.5;
-  animation: toast-in 0.2s ease;
-}
-
-.toast.ok {
-  border-color: rgba(76, 195, 138, 0.5);
-  color: var(--ok);
-}
-
-.toast.err {
-  border-color: rgba(229, 115, 115, 0.5);
-  color: var(--danger);
-}
-
-@keyframes toast-in {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 </style>

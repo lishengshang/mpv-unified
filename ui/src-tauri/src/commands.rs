@@ -145,6 +145,13 @@ pub fn regenerate() -> Result<RegenSummary, String> {
     })
 }
 
+/// Whether uosc ships with the repository (scripts/uosc.lua or
+/// scripts/uosc/main.lua) — drives the "uosc 联动" status on the Help page.
+#[tauri::command]
+pub fn uosc_status() -> Result<bool, String> {
+    Ok(mpv_core::uosc::detect_installed(&cli::gen::repo_root().join("scripts")))
+}
+
 /// Every curated option of the "配置" page (from `config/options-gui.yaml`).
 #[tauri::command]
 pub fn list_options() -> Result<Vec<mpv_core::options_gui::GuiOption>, String> {
@@ -193,4 +200,31 @@ pub fn reset_gui_value(key: String) -> Result<(), String> {
         .collect();
     mpv_core::options_gui::write_gui_conf(&table, &user_dir, &values)
         .map_err(|error| format!("重置失败:{error}"))
+}
+
+/// Check the remote index for a newer version (T22). The result never
+/// fails; every failure mode is carried in `UpdateInfo.error`.
+#[tauri::command]
+pub fn check_update() -> Result<pkg::upgrade::UpdateInfo, String> {
+    let root = cli::gen::repo_root();
+    Ok(pkg::upgrade::check_update(
+        &pkg::fetch::HttpFetcher,
+        pkg::fetch::DEFAULT_INDEX_URL,
+        &root,
+    ))
+}
+
+/// Execute the guided upgrade (T22): download → backup app layer → overlay
+/// (user layer preserved) with automatic rollback on failure. Confirmation
+/// is the frontend's job (explicit dialog before invoking this command).
+#[tauri::command]
+pub fn perform_upgrade() -> Result<pkg::upgrade::UpgradeResult, String> {
+    let root = cli::gen::repo_root();
+    let cache = pkg::fetch::cache_dir().map_err(|error| format!("无法定位缓存目录:{error}"))?;
+    Ok(pkg::upgrade::perform_upgrade(
+        &pkg::fetch::HttpFetcher,
+        pkg::fetch::DEFAULT_INDEX_URL,
+        &cache,
+        &root,
+    ))
 }

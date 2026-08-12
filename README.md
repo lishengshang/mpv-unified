@@ -12,6 +12,26 @@ PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为
 
 **mpv 整合包下载**：[Releases](https://github.com/dyphire/mpv-config/releases)
 
+### 快速开始(三平台)
+
+> **最低支持 mpv 版本:0.36**(决策 D12⑤:各平台跟随较新稳定版;`apply-profile`
+> 命令与 uosc 5.x 均要求 ≥ 0.36,建议直接使用最新稳定版)。
+
+1. **下载**:到 [Releases](https://github.com/dyphire/mpv-config/releases) 下载
+   对应平台的 zip(`mpv-config-<linux|windows|macos>-<version>.zip`)。
+2. **解压**:解压后得到 `mpv-config/` 目录(app 层配置 + 生成器;`user/`
+   由首次运行自动创建,升级时原样保留)。
+3. **放置**(两种方式任选):
+   - **Windows**:把 `portable_config` 目录放入 `mpv.exe` 所在目录(推荐,
+     覆盖全局配置);或把生成内容放入 `%APPDATA%/mpv/`(全局生效)。
+   - **Linux / macOS**:放入 `~/.config/mpv/`(或 `$XDG_CONFIG_HOME/mpv`)。
+4. **使用**:运行 `mpv-config gen`(或使用图形界面"方案/配置/应用并生成"),
+   把生成的 `dist/` 内容放入 mpv 配置目录即可;播放中右键 uosc 菜单
+   「方案」子菜单可随时切换方案(见 [uosc 联动](docs/uosc-integration.md))。
+
+> 自行编辑配置文件时,注意编码格式应为 UTF-8,换行符为 Unix,否则 MPV
+> 可能无法识别。macOS 平台层标记 experimental,暂未真机验证。
+
 ### 跨平台配置源(`config/` 四层结构)
 
 > 本项目正在将单平台配置改造为"一份源 + 平台规则"的跨平台配置源。

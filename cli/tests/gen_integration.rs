@@ -331,6 +331,91 @@ fn missing_platform_layer_for_linux_is_an_error() {
 }
 
 #[test]
+fn gui_conf_overrides_user_conf_in_generated_output() {
+    let root = minimal_root("gui-override", "sub-font-size=20\n", Some("vo=gpu\n"));
+    write(
+        &root.path().join("user/user.conf"),
+        "# 手动配置\nsub-font-size=50\n",
+    );
+    write(
+        &root.path().join("user/gui.conf"),
+        "# 由 mpv-config GUI 管理\n\nsub-font-size=44\n",
+    );
+    let out = TestDir::new("gui-override-out");
+
+    let report = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation with gui.conf succeeds");
+
+    assert!(
+        report.warnings.iter().all(|w| !w.contains("gui.conf")),
+        "no gui.conf warnings on the happy path: {:?}",
+        report.warnings
+    );
+    let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    // Every layer's lines survive (comment-preserving merge); the LAST
+    // occurrence is the effective one, and it must come from gui.conf.
+    let last = mpv
+        .lines()
+        .rev()
+        .find(|l| l.starts_with("sub-font-size="));
+    assert_eq!(last, Some("sub-font-size=44"), "{mpv}");
+    assert!(mpv.contains("# 手动配置"), "user.conf comment preserved: {mpv}");
+    assert!(
+        mpv.contains("# 由 mpv-config GUI 管理"),
+        "gui.conf comment preserved: {mpv}"
+    );
+    // The merged document still round-trips losslessly.
+    let doc = core::conf::parse(&mpv).expect("output must parse");
+    assert_eq!(core::conf::serialize(&doc), mpv);
+}
+
+#[test]
+fn gui_conf_missing_means_user_conf_wins() {
+    let root = minimal_root("no-gui", "sub-font-size=20\n", Some("vo=gpu\n"));
+    write(&root.path().join("user/user.conf"), "sub-font-size=50\n");
+    let out = TestDir::new("no-gui-out");
+
+    run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect("generation without gui.conf succeeds");
+
+    let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
+    let last = mpv
+        .lines()
+        .rev()
+        .find(|l| l.starts_with("sub-font-size="));
+    assert_eq!(last, Some("sub-font-size=50"), "{mpv}");
+}
+
+#[test]
+fn corrupt_gui_conf_errors_without_overwriting() {
+    let root = minimal_root("corrupt-gui", "sub-font-size=20\n", Some("vo=gpu\n"));
+    let gui = "sub-font-size=\"unterminated\n";
+    write(&root.path().join("user/gui.conf"), gui);
+    let out = TestDir::new("corrupt-gui-out");
+
+    let error = run_at_root(
+        root.path(),
+        &options(Platform::Linux, &out.path().join("dist"), false),
+    )
+    .expect_err("corrupt gui.conf must fail generation");
+
+    let message = error.to_string();
+    assert!(message.contains("gui.conf"), "{message}");
+    assert!(message.contains("line"), "{message}");
+    assert_eq!(
+        fs::read_to_string(root.path().join("user/gui.conf")).expect("gui.conf intact"),
+        gui,
+        "gui.conf must be preserved byte-for-byte on parse failure"
+    );
+}
+
+#[test]
 fn unwritable_output_path_is_an_error() {
     let out = TestDir::new("unwritable-out");
     let output_path = out.path().join("output-file");

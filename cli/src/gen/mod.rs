@@ -2,13 +2,16 @@
 //!
 //! Pipeline per target platform: read the layer files from the repository
 //! root (`config/base.conf` → `config/{platform}.conf` → packages under
-//! `config.d/packages/` → optional `user/user.conf`), evaluate each layer's
-//! `#@if`/`#@else`/`#@endif` directives for the platform, merge the four
-//! layers (later layer wins conflicts, every comment preserved) and
-//! serialize the result as `mpv.conf`. `input.conf` is assembled the same
-//! way by concatenating `config/input.conf` with the platform variant
-//! `config/{platform}.input.conf`, when present. `--dry-run` reports the
-//! planned files without touching the filesystem.
+//! `config.d/packages/` → optional `user/user.conf` → optional
+//! `user/gui.conf`), evaluate each layer's `#@if`/`#@else`/`#@endif`
+//! directives for the platform, merge the layers (later layer wins
+//! conflicts, every comment preserved) and serialize the result as
+//! `mpv.conf`. `gui.conf` is the GUI-managed fragment written by the "配置"
+//! page (only non-default values), so it sits above the manual `user.conf`.
+//! `input.conf` is assembled the same way by concatenating
+//! `config/input.conf` with the platform variant `config/{platform}.input.conf`,
+//! when present. `--dry-run` reports the planned files without touching the
+//! filesystem.
 //!
 //! Nothing here panics: every failure is a [`GenError`] with a
 //! human-readable Chinese message, and the CLI maps it to exit code 1.
@@ -21,7 +24,7 @@ mod user;
 pub use error::GenError;
 
 use core::conf::{serialize, ConfDoc};
-use core::merge::{merge_docs, MergeLayer};
+use core::merge::{merge, merge_docs, MergeLayer};
 use core::platform::{self, Platform};
 use input::build_input;
 use layers::{load_layer, load_packages, platform_name};
@@ -141,6 +144,7 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     }
 
     let user = load_layer(root, "user/user.conf", platform, false)?;
+    let gui = load_layer(root, "user/gui.conf", platform, false)?;
 
     let merged =
         merge_docs(&base, &platform_layer, &packages, user.as_ref()).map_err(|merge_error| {
@@ -150,6 +154,22 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
                 message: merge_error.message,
             }
         })?;
+
+    // gui.conf(GUI「配置」页管理的独立片段)优先级高于 user.conf:存在时作为
+    // 最后一个层叠加(user.conf 之后),同名键由 gui 层覆盖。手动编辑的
+    // user.conf 内容原样保留;缺失时静默跳过。
+    let merged = match gui.as_ref() {
+        Some(gui) => {
+            merge(vec![MergeLayer::new("user/gui.conf", merged), gui.clone()]).map_err(
+                |merge_error| GenError::Parse {
+                    layer: merge_error.layer,
+                    line: merge_error.line,
+                    message: merge_error.message,
+                },
+            )?
+        }
+        None => merged,
+    };
 
     // 方案块追加(任务 18):启用方案 → 生成 mpv profile 块,追加到 mpv.conf
     // 末尾。profiles.yaml 缺失时静默跳过;损坏或状态读取失败时警告并跳过

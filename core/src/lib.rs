@@ -11,5 +11,6 @@
 pub mod cond;
 pub mod conf;
 pub mod merge;
+pub mod options_gui;
 pub mod platform;
 pub mod profiles;

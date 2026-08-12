@@ -144,3 +144,53 @@ pub fn regenerate() -> Result<RegenSummary, String> {
         warnings: report.warnings,
     })
 }
+
+/// Every curated option of the "配置" page (from `config/options-gui.yaml`).
+#[tauri::command]
+pub fn list_options() -> Result<Vec<mpv_core::options_gui::GuiOption>, String> {
+    let root = cli::gen::repo_root();
+    let table = mpv_core::options_gui::OptionsTable::load(&root.join("config/options-gui.yaml"))
+        .map_err(|error| format!("读取选项表失败:{error}"))?;
+    Ok(table.options)
+}
+
+/// The currently stored `user/gui.conf` values (empty on first run).
+#[tauri::command]
+pub fn get_gui_values() -> Result<Vec<(String, String)>, String> {
+    let root = cli::gen::repo_root();
+    mpv_core::options_gui::read_gui_conf(&root.join("user"))
+        .map_err(|error| format!("读取已保存配置失败:{error}"))
+}
+
+/// Persist a complete form state to `user/gui.conf`.
+///
+/// Only values differing from the curated defaults are written (mpv.net
+/// strategy); every value is validated first, so one invalid value aborts
+/// the whole write.
+#[tauri::command]
+pub fn save_gui_values(values: Vec<(String, String)>) -> Result<(), String> {
+    let root = cli::gen::repo_root();
+    let table = mpv_core::options_gui::OptionsTable::load(&root.join("config/options-gui.yaml"))
+        .map_err(|error| format!("读取选项表失败:{error}"))?;
+    mpv_core::options_gui::write_gui_conf(&table, &root.join("user"), &values)
+        .map_err(|error| format!("保存失败:{error}"))
+}
+
+/// Reset one option to its curated default (removes its line, if any).
+#[tauri::command]
+pub fn reset_gui_value(key: String) -> Result<(), String> {
+    let root = cli::gen::repo_root();
+    let user_dir = root.join("user");
+    let table = mpv_core::options_gui::OptionsTable::load(&root.join("config/options-gui.yaml"))
+        .map_err(|error| format!("读取选项表失败:{error}"))?;
+    table
+        .find(&key)
+        .ok_or_else(|| format!("未知选项:{key}"))?;
+    let values: Vec<(String, String)> = mpv_core::options_gui::read_gui_conf(&user_dir)
+        .map_err(|error| format!("读取已保存配置失败:{error}"))?
+        .into_iter()
+        .filter(|(k, _)| *k != key)
+        .collect();
+    mpv_core::options_gui::write_gui_conf(&table, &user_dir, &values)
+        .map_err(|error| format!("重置失败:{error}"))
+}

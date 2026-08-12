@@ -1,0 +1,682 @@
+# options-gui.yaml — 常用选项精选表(供 GUI「配置」页渲染表单)
+#
+# 任务 19(决策 D13):不做全量 400+ 选项,只精选 ~50-100 个高频项。
+# 每一项 = {key, category, type, min/max(仅 number), choices(仅 select),
+# default, desc_zh, desc_en, doc_url}。
+#
+# 语义约定:
+# - category 章节固定为 general/video/audio/subtitle/performance/network/window/other(决策 D8)。
+# - type: switch(开关)/number(数字)/select(下拉)/string(字符串)/path(路径)。
+# - default 是「项目基线」:base.conf 已设置的值优先(平台层有差异时取 Linux 分支),
+#   未设置的取 mpv 官方默认值。GUI 只把「与 default 不同」的项写入 user/gui.conf
+#   (mpv.net 只写非默认策略),因此 default 应等于当前配置的实际生效值。
+# - key 全部为真实 mpv 选项名,不得编造;doc_url 指向官方手册锚点。
+
+options:
+  # ======================== general 通用(播放行为) ========================
+  - key: save-position-on-quit
+    category: general
+    type: switch
+    default: yes
+    desc_zh: 退出时记住播放进度
+    desc_en: Save playback position on quit (watch-later)
+    doc_url: https://mpv.io/manual/master/#options-save-position-on-quit
+  - key: idle
+    category: general
+    type: select
+    choices: [no, yes, once]
+    default: yes
+    desc_zh: 空闲待机模式(播完/停止后保持窗口)
+    desc_en: Keep the player running when idle
+    doc_url: https://mpv.io/manual/master/#options-idle
+  - key: keep-open
+    category: general
+    type: select
+    choices: [no, yes, always]
+    default: no
+    desc_zh: 播放结束后保持窗口(always 连普通文件也不退出)
+    desc_en: Keep the player open after playback ends
+    doc_url: https://mpv.io/manual/master/#options-keep-open
+  - key: loop-playlist
+    category: general
+    type: select
+    choices: [no, inf, yes]
+    default: no
+    desc_zh: 循环播放列表
+    desc_en: Loop the playlist
+    doc_url: https://mpv.io/manual/master/#options-loop-playlist
+  - key: loop-file
+    category: general
+    type: select
+    choices: [no, inf, yes]
+    default: no
+    desc_zh: 循环播放当前文件
+    desc_en: Loop the current file
+    doc_url: https://mpv.io/manual/master/#options-loop-file
+  - key: hr-seek
+    category: general
+    type: select
+    choices: [no, absolute, default, yes, always]
+    default: yes
+    desc_zh: 精确跳转策略(不限于关键帧)
+    desc_en: When to use precise (non-keyframe) seeking
+    doc_url: https://mpv.io/manual/master/#options-hr-seek
+  - key: hr-seek-framedrop
+    category: general
+    type: switch
+    default: no
+    desc_zh: 跳转时丢帧(关闭利于修正音频延迟)
+    desc_en: Drop frames during precise seeks
+    doc_url: https://mpv.io/manual/master/#options-hr-seek-framedrop
+  - key: osc
+    category: general
+    type: select
+    choices: [auto, yes, no]
+    default: no
+    desc_zh: 内置 OSC 控制条(本项目使用第三方 uosc,故默认关闭)
+    desc_en: Built-in on-screen controller
+    doc_url: https://mpv.io/manual/master/#options-osc
+  - key: screenshot-directory
+    category: general
+    type: path
+    default: ""
+    desc_zh: 截图保存目录(留空 = 播放器默认)
+    desc_en: Directory for screenshots
+    doc_url: https://mpv.io/manual/master/#options-screenshot-directory
+  - key: screenshot-format
+    category: general
+    type: select
+    choices: [jpg, jpeg, png, webp, jxl, avif]
+    default: png
+    desc_zh: 截图格式
+    desc_en: Screenshot file format
+    doc_url: https://mpv.io/manual/master/#options-screenshot-format
+
+  # ======================== video 视频 ========================
+  - key: vo
+    category: video
+    type: select
+    choices: [gpu, gpu-next, libmpv]
+    default: gpu-next
+    desc_zh: 视频输出驱动(gpu-next 已实现杜比视界 RPU 解析)
+    desc_en: Video output driver
+    doc_url: https://mpv.io/manual/master/#options-vo
+  - key: gpu-api
+    category: video
+    type: select
+    choices: [opengl, vulkan, d3d11]
+    default: vulkan
+    desc_zh: 图形绘制接口(Linux 推荐 vulkan;Windows 推荐 d3d11)
+    desc_en: GPU API for rendering
+    doc_url: https://mpv.io/manual/master/#options-gpu-api
+  - key: hwdec
+    category: video
+    type: select
+    choices: [auto, auto-safe, auto-copy-safe, no, d3d11va, d3d11va-copy, vaapi, vaapi-copy, nvdec, nvdec-copy, vulkan, vulkan-copy]
+    default: auto-copy-safe
+    desc_zh: 硬件解码模式(copy 模式可保证滤镜/着色器正常作用)
+    desc_en: Hardware video decoding API
+    doc_url: https://mpv.io/manual/master/#options-hwdec
+  - key: scale
+    category: video
+    type: select
+    choices: [ewa_lanczossharp, ewa_lanczos, ewa_hanning, ewa_ginseng, lanczos, ginseng, spline36, spline16, bicubic, catmull_rom, mitchell, bilinear, nearest]
+    default: ewa_lanczossharp
+    desc_zh: 亮度放大算法(画质最高档的通用选择)
+    desc_en: Luma upscaling algorithm
+    doc_url: https://mpv.io/manual/master/#options-scale
+  - key: cscale
+    category: video
+    type: select
+    choices: [spline36, ewa_lanczossharp, ewa_lanczos, lanczos, bicubic, catmull_rom, mitchell, bilinear, nearest]
+    default: spline36
+    desc_zh: 色度升频算法(使用 KrigBilateral 着色器时被覆盖)
+    desc_en: Chroma upscaling algorithm
+    doc_url: https://mpv.io/manual/master/#options-cscale
+  - key: dscale
+    category: video
+    type: select
+    choices: [mitchell, spline36, spline16, lanczos, ewa_lanczossharp, bicubic, bilinear, nearest]
+    default: mitchell
+    desc_zh: 亮度缩小算法(缩小场景锐利度/振铃平衡好)
+    desc_en: Luma downscaling algorithm
+    doc_url: https://mpv.io/manual/master/#options-dscale
+  - key: deband
+    category: video
+    type: switch
+    default: no
+    desc_zh: 去色带(消除渐变区域的色阶断层)
+    desc_en: Deband (remove banding artifacts)
+    doc_url: https://mpv.io/manual/master/#options-deband
+  - key: deband-iterations
+    category: video
+    type: number
+    min: 1
+    max: 16
+    default: 1
+    desc_zh: 去色带迭代次数(越大越平滑也越耗性能)
+    desc_en: Deband iteration count
+    doc_url: https://mpv.io/manual/master/#options-deband-iterations
+  - key: deband-threshold
+    category: video
+    type: number
+    min: 0
+    max: 4096
+    default: 4096
+    desc_zh: 去色带阈值(相邻像素差小于该值才处理)
+    desc_en: Deband threshold
+    doc_url: https://mpv.io/manual/master/#options-deband-threshold
+  - key: deband-range
+    category: video
+    type: number
+    min: 1
+    max: 64
+    default: 16
+    desc_zh: 去色带采样范围(像素)
+    desc_en: Deband range in pixels
+    doc_url: https://mpv.io/manual/master/#options-deband-range
+  - key: video-sync
+    category: video
+    type: select
+    choices: [audio, display-resample, display-resample-vdrop, display-adrop, display-desync, display-tempo]
+    default: audio
+    desc_zh: 音视频同步模式(补帧需要 display-resample)
+    desc_en: Video sync mode
+    doc_url: https://mpv.io/manual/master/#options-video-sync
+  - key: interpolation
+    category: video
+    type: switch
+    default: no
+    desc_zh: 补帧(需要 video-sync=display-resample,耗性能)
+    desc_en: Motion interpolation (requires display-resample)
+    doc_url: https://mpv.io/manual/master/#options-interpolation
+  - key: video-output-levels
+    category: video
+    type: select
+    choices: [auto, pc, tv]
+    default: auto
+    desc_zh: 视频输出电平(显示器接电视出现黑屏/泛灰时调整)
+    desc_en: Video output levels (PC/TV)
+    doc_url: https://mpv.io/manual/master/#options-video-output-levels
+  - key: tone-mapping
+    category: video
+    type: select
+    choices: [auto, clip, mobius, reinhard, hable, gamma, linear, spline, bt.2446a, st2094-40, st2094-10]
+    default: auto
+    desc_zh: HDR 色调映射算法
+    desc_en: HDR tone mapping algorithm
+    doc_url: https://mpv.io/manual/master/#options-tone-mapping
+  - key: frame-drop
+    category: video
+    type: select
+    choices: [no, vo, decoder]
+    default: vo
+    desc_zh: 丢帧模式(vo 丢显示帧保同步,decoder 跳过解码)
+    desc_en: Frame dropping mode
+    doc_url: https://mpv.io/manual/master/#options-frame-drop
+  - key: deinterlace
+    category: video
+    type: switch
+    default: no
+    desc_zh: 反交错(处理隔行扫描源,如电视录制)
+    desc_en: Deinterlacing
+    doc_url: https://mpv.io/manual/master/#options-deinterlace
+
+  # ======================== audio 音频 ========================
+  - key: volume
+    category: audio
+    type: number
+    min: 0
+    max: 130
+    default: 100
+    desc_zh: 初始音量(百分比)
+    desc_en: Initial volume (percent)
+    doc_url: https://mpv.io/manual/master/#options-volume
+  - key: volume-max
+    category: audio
+    type: number
+    min: 100
+    max: 1000
+    default: 130
+    desc_zh: 音量上限(百分比,默认即 mpv 官方上限)
+    desc_en: Maximum volume (percent)
+    doc_url: https://mpv.io/manual/master/#options-volume-max
+  - key: volume-step
+    category: audio
+    type: number
+    min: 1
+    max: 130
+    default: 3
+    desc_zh: 音量步进(每按一次键的变化量)
+    desc_en: Volume adjustment step
+    doc_url: https://mpv.io/manual/master/#options-volume-step
+  - key: mute
+    category: audio
+    type: switch
+    default: no
+    desc_zh: 启动时静音
+    desc_en: Mute at startup
+    doc_url: https://mpv.io/manual/master/#options-mute
+  - key: audio-delay
+    category: audio
+    type: number
+    min: -30
+    max: 30
+    default: 0
+    desc_zh: 音频延迟(秒,正数延迟声音)
+    desc_en: Audio delay in seconds
+    doc_url: https://mpv.io/manual/master/#options-audio-delay
+  - key: audio-file-auto
+    category: audio
+    type: select
+    choices: [no, exact, fuzzy, all]
+    default: fuzzy
+    desc_zh: 自动加载同名外部音轨
+    desc_en: Auto-load external audio tracks
+    doc_url: https://mpv.io/manual/master/#options-audio-file-auto
+  - key: audio-channels
+    category: audio
+    type: select
+    choices: [auto, stereo, "2.0", "5.1", "7.1", "7.1,5.1,stereo"]
+    default: "7.1,5.1,stereo"
+    desc_zh: 音频声道布局(双声道系统无声时可强制 stereo)
+    desc_en: Audio channel layout
+    doc_url: https://mpv.io/manual/master/#options-audio-channels
+  - key: audio-normalize-downmix
+    category: audio
+    type: switch
+    default: no
+    desc_zh: 多声道降混时归一化音量
+    desc_en: Normalize volume when downmixing channels
+    doc_url: https://mpv.io/manual/master/#options-audio-normalize-downmix
+  - key: gapless-audio
+    category: audio
+    type: select
+    choices: [no, yes, weak]
+    default: no
+    desc_zh: 无缝切换音频文件(格式变化时初始化输出)
+    desc_en: Gapless audio switching
+    doc_url: https://mpv.io/manual/master/#options-gapless-audio
+  - key: audio-pitch-correction
+    category: audio
+    type: switch
+    default: yes
+    desc_zh: 变速播放时保持音调
+    desc_en: Keep pitch when changing playback speed
+    doc_url: https://mpv.io/manual/master/#options-audio-pitch-correction
+  - key: audio-buffer
+    category: audio
+    type: number
+    min: 0.1
+    max: 10
+    default: 0.2
+    desc_zh: 音频输出缓冲(秒,卡顿时可尝试调大)
+    desc_en: Audio output buffer in seconds
+    doc_url: https://mpv.io/manual/master/#options-audio-buffer
+  - key: audio-exclusive
+    category: audio
+    type: switch
+    default: no
+    desc_zh: 独占音频输出(Windows,需 WASAPI 独占模式)
+    desc_en: Exclusive audio output (Windows)
+    doc_url: https://mpv.io/manual/master/#options-audio-exclusive
+  - key: alang
+    category: audio
+    type: string
+    default: "japanese,jpn,jap,ja,jp,english,eng,en"
+    desc_zh: 首选音轨语言列表(逗号分隔)
+    desc_en: Preferred audio track languages
+    doc_url: https://mpv.io/manual/master/#options-alang
+
+  # ======================== subtitle 字幕 ========================
+  - key: sub-font-size
+    category: subtitle
+    type: number
+    min: 1
+    max: 100
+    default: 55
+    desc_zh: 字幕字号
+    desc_en: Subtitle font size
+    doc_url: https://mpv.io/manual/master/#options-sub-font-size
+  - key: sub-font
+    category: subtitle
+    type: string
+    default: "Noto Sans CJK SC"
+    desc_zh: 字幕字体(对 ASS 缺省字体同样生效)
+    desc_en: Subtitle font family
+    doc_url: https://mpv.io/manual/master/#options-sub-font
+  - key: sub-color
+    category: subtitle
+    type: string
+    default: "#FFFFFF"
+    desc_zh: 字幕文字颜色(格式 #AARRGGBB)
+    desc_en: Subtitle text color
+    doc_url: https://mpv.io/manual/master/#options-sub-color
+  - key: sub-outline-size
+    category: subtitle
+    type: number
+    min: 0
+    max: 10
+    default: 0.5
+    desc_zh: 字幕描边宽度
+    desc_en: Subtitle outline width
+    doc_url: https://mpv.io/manual/master/#options-sub-outline-size
+  - key: sub-outline-color
+    category: subtitle
+    type: string
+    default: "#000000"
+    desc_zh: 字幕描边颜色
+    desc_en: Subtitle outline color
+    doc_url: https://mpv.io/manual/master/#options-sub-outline-color
+  - key: sub-back-color
+    category: subtitle
+    type: string
+    default: "#000000"
+    desc_zh: 字幕阴影/背景颜色
+    desc_en: Subtitle shadow/background color
+    doc_url: https://mpv.io/manual/master/#options-sub-back-color
+  - key: sub-shadow-offset
+    category: subtitle
+    type: number
+    min: 0
+    max: 10
+    default: 0.5
+    desc_zh: 字幕阴影大小
+    desc_en: Subtitle shadow offset
+    doc_url: https://mpv.io/manual/master/#options-sub-shadow-offset
+  - key: sub-shadow-color
+    category: subtitle
+    type: string
+    default: "#000000"
+    desc_zh: 字幕阴影颜色
+    desc_en: Subtitle shadow color
+    doc_url: https://mpv.io/manual/master/#options-sub-shadow-color
+  - key: sub-blur
+    category: subtitle
+    type: number
+    min: 0
+    max: 20
+    default: 0
+    desc_zh: 字幕边缘模糊(配合描边做柔和光晕)
+    desc_en: Subtitle blur
+    doc_url: https://mpv.io/manual/master/#options-sub-blur
+  - key: sub-bold
+    category: subtitle
+    type: switch
+    default: yes
+    desc_zh: 字幕粗体
+    desc_en: Bold subtitle text
+    doc_url: https://mpv.io/manual/master/#options-sub-bold
+  - key: sub-scale
+    category: subtitle
+    type: number
+    min: 0
+    max: 100
+    default: 1
+    desc_zh: 字幕整体缩放倍率
+    desc_en: Subtitle scale factor
+    doc_url: https://mpv.io/manual/master/#options-sub-scale
+  - key: sub-ass-override
+    category: subtitle
+    type: select
+    choices: [no, yes, force, scale, strip]
+    default: yes
+    desc_zh: ASS 样式覆盖(no = 尊重字幕自带样式)
+    desc_en: Override ASS subtitle styles
+    doc_url: https://mpv.io/manual/master/#options-sub-ass-override
+  - key: sub-auto
+    category: subtitle
+    type: select
+    choices: [no, exact, fuzzy, all]
+    default: fuzzy
+    desc_zh: 自动加载同名外部字幕
+    desc_en: Auto-load external subtitles
+    doc_url: https://mpv.io/manual/master/#options-sub-auto
+  - key: sub-delay
+    category: subtitle
+    type: number
+    min: -60
+    max: 60
+    default: 0
+    desc_zh: 字幕延迟(秒,正数延后显示)
+    desc_en: Subtitle delay in seconds
+    doc_url: https://mpv.io/manual/master/#options-sub-delay
+  - key: sub-pos
+    category: subtitle
+    type: number
+    min: 0
+    max: 100
+    default: 100
+    desc_zh: 字幕垂直位置(0=顶部,100=底部)
+    desc_en: Subtitle vertical position
+    doc_url: https://mpv.io/manual/master/#options-sub-pos
+  - key: sub-visibility
+    category: subtitle
+    type: switch
+    default: yes
+    desc_zh: 字幕可见性
+    desc_en: Subtitle visibility
+    doc_url: https://mpv.io/manual/master/#options-sub-visibility
+  - key: sub-use-margins
+    category: subtitle
+    type: switch
+    default: yes
+    desc_zh: 字幕使用边距(视频安全区)
+    desc_en: Use video margins for subtitles
+    doc_url: https://mpv.io/manual/master/#options-sub-use-margins
+  - key: sub-codepage
+    category: subtitle
+    type: string
+    default: "gb18030"
+    desc_zh: 文本字幕编码(auto = 自动检测,国标字幕常为 gb18030)
+    desc_en: Subtitle text encoding
+    doc_url: https://mpv.io/manual/master/#options-sub-codepage
+  - key: slang
+    category: subtitle
+    type: string
+    default: "chs,sc,zh-Hans,zh-CN,cht,tc,zh-Hant,zh-HK,zh-TW,chi,zho,zh"
+    desc_zh: 首选字幕语言列表(逗号分隔)
+    desc_en: Preferred subtitle languages
+    doc_url: https://mpv.io/manual/master/#options-slang
+
+  # ======================== performance 性能(缓存/解码) ========================
+  - key: cache
+    category: performance
+    type: number
+    min: 0
+    max: 10000
+    default: 0
+    desc_zh: 本地文件缓存大小(MiB,0 = 不缓存)
+    desc_en: Cache size in MiB for local files (0 = off)
+    doc_url: https://mpv.io/manual/master/#options-cache
+  - key: demuxer-readahead-secs
+    category: performance
+    type: number
+    min: 0
+    max: 9999
+    default: 20
+    desc_zh: 网络视频预读时长(秒)
+    desc_en: Network stream readahead in seconds
+    doc_url: https://mpv.io/manual/master/#options-demuxer-readahead-secs
+  - key: demuxer-max-bytes
+    category: performance
+    type: number
+    min: 0
+    max: 10000
+    default: 150
+    desc_zh: 网络视频目标缓存大小(MiB)
+    desc_en: Network stream cache size in MiB
+    doc_url: https://mpv.io/manual/master/#options-demuxer-max-bytes
+  - key: thread-count
+    category: performance
+    type: number
+    min: 0
+    max: 64
+    default: 0
+    desc_zh: 解码线程数(0 = 自动)
+    desc_en: Decoder thread count (0 = auto)
+    doc_url: https://mpv.io/manual/master/#options-thread-count
+
+  # ======================== network 网络 ========================
+  - key: ytdl
+    category: network
+    type: switch
+    default: yes
+    desc_zh: 启用 yt-dlp 解析在线视频
+    desc_en: Use yt-dlp for online media
+    doc_url: https://mpv.io/manual/master/#options-ytdl
+  - key: ytdl-format
+    category: network
+    type: string
+    default: "bestvideo+bestaudio/best"
+    desc_zh: yt-dlp 视频格式选择(ytdl-format)
+    desc_en: yt-dlp format selection
+    doc_url: https://mpv.io/manual/master/#options-ytdl-format
+  - key: network-timeout
+    category: network
+    type: number
+    min: 0
+    max: 9999
+    default: 0
+    desc_zh: 网络超时(秒,0 = 不超时)
+    desc_en: Network timeout in seconds (0 = none)
+    doc_url: https://mpv.io/manual/master/#options-network-timeout
+  - key: cache-pause
+    category: network
+    type: switch
+    default: yes
+    desc_zh: 网络缓冲不足时自动暂停
+    desc_en: Pause playback when network cache runs low
+    doc_url: https://mpv.io/manual/master/#options-cache-pause
+
+  # ======================== window 窗口 ========================
+  - key: fullscreen
+    category: window
+    type: switch
+    default: no
+    desc_zh: 启动时全屏
+    desc_en: Start in fullscreen
+    doc_url: https://mpv.io/manual/master/#options-fullscreen
+  - key: window-fullscreen
+    category: window
+    type: switch
+    default: no
+    desc_zh: 窗口全屏(无边框占满屏幕,非独占)
+    desc_en: Borderless fullscreen window
+    doc_url: https://mpv.io/manual/master/#options-window-fullscreen
+  - key: ontop
+    category: window
+    type: switch
+    default: no
+    desc_zh: 窗口置顶
+    desc_en: Keep the window on top
+    doc_url: https://mpv.io/manual/master/#options-ontop
+  - key: border
+    category: window
+    type: switch
+    default: yes
+    desc_zh: 显示窗口边框
+    desc_en: Show the window border
+    doc_url: https://mpv.io/manual/master/#options-border
+  - key: window-minimized
+    category: window
+    type: switch
+    default: no
+    desc_zh: 启动时最小化
+    desc_en: Start minimized
+    doc_url: https://mpv.io/manual/master/#options-window-minimized
+  - key: window-maximized
+    category: window
+    type: switch
+    default: no
+    desc_zh: 启动时最大化
+    desc_en: Start maximized
+    doc_url: https://mpv.io/manual/master/#options-window-maximized
+  - key: keepaspect-window
+    category: window
+    type: switch
+    default: yes
+    desc_zh: 调整窗口大小时保持画面比例
+    desc_en: Keep video aspect when resizing
+    doc_url: https://mpv.io/manual/master/#options-keepaspect-window
+  - key: force-window
+    category: window
+    type: select
+    choices: [no, yes, immediate]
+    default: immediate
+    desc_zh: 强制创建窗口(音频/无窗口环境下也显示)
+    desc_en: Force window creation
+    doc_url: https://mpv.io/manual/master/#options-force-window
+  - key: window-title
+    category: window
+    type: string
+    default: ""
+    desc_zh: 窗口标题(留空 = 播放器默认)
+    desc_en: Window title (empty = default)
+    doc_url: https://mpv.io/manual/master/#options-window-title
+  - key: window-scale
+    category: window
+    type: number
+    min: 0.1
+    max: 100
+    default: 1
+    desc_zh: 窗口初始缩放倍率
+    desc_en: Initial window scale
+    doc_url: https://mpv.io/manual/master/#options-window-scale
+
+  # ======================== other 其他(输入/OSD) ========================
+  - key: input-ime
+    category: other
+    type: switch
+    default: no
+    desc_zh: 启用全局 IME(输入法,默认仅在文本输入时激活)
+    desc_en: Enable global IME
+    doc_url: https://mpv.io/manual/master/#options-input-ime
+  - key: cursor-autohide
+    category: other
+    type: number
+    min: 0
+    max: 10000
+    default: 1000
+    desc_zh: 鼠标指针自动隐藏延迟(毫秒)
+    desc_en: Cursor autohide delay in ms
+    doc_url: https://mpv.io/manual/master/#options-cursor-autohide
+  - key: cursor-autohide-fs-only
+    category: other
+    type: switch
+    default: no
+    desc_zh: 仅全屏时自动隐藏鼠标
+    desc_en: Autohide cursor in fullscreen only
+    doc_url: https://mpv.io/manual/master/#options-cursor-autohide-fs-only
+  - key: log-file
+    category: other
+    type: path
+    default: "~~/files/mpv.log"
+    desc_zh: 日志文件路径(留空 = 不写文件)
+    desc_en: Log file path (empty = no log file)
+    doc_url: https://mpv.io/manual/master/#options-log-file
+  - key: osd-font
+    category: other
+    type: string
+    default: "Noto Sans Mono CJK SC"
+    desc_zh: OSD 字体
+    desc_en: OSD font family
+    doc_url: https://mpv.io/manual/master/#options-osd-font
+  - key: osd-font-size
+    category: other
+    type: number
+    min: 1
+    max: 100
+    default: 24
+    desc_zh: OSD 字体大小(影响进度/菜单等文字)
+    desc_en: OSD font size
+    doc_url: https://mpv.io/manual/master/#options-osd-font-size
+  - key: osd-duration
+    category: other
+    type: number
+    min: 500
+    max: 10000
+    default: 2000
+    desc_zh: OSD 信息显示时长(毫秒)
+    desc_en: OSD message duration in ms
+    doc_url: https://mpv.io/manual/master/#options-osd-duration

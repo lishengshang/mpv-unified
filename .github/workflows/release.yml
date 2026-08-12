@@ -1,0 +1,79 @@
+name: Release
+
+# 手动打 tag(v*)触发 → 三平台矩阵各自组装成品 zip → 上传到 GitHub Release 草稿。
+# 注意: release 不自动触发(需手动 git tag vX.Y.Z && git push origin vX.Y.Z),
+# 草稿 release 创建后人工核对 changelog 再发布。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      # CLI 二进制为 zip 必需件;先构建保证 build-dist.sh 能取到 release 二进制。
+      - name: Build CLI (release)
+        run: cargo build --release -p cli
+
+      # UI 前端产物(供 Tauri 壳引用)。bun install 用 lockfile 快速恢复。
+      - name: Build UI frontend
+        working-directory: ui
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      # GUI 二进制可选(zip 分发以 CLI + 配置为主)。tauri 依赖链较重,
+      # 若编译超时可注释本步 —— build-dist.sh 对缺失 GUI 二进制仅警告,不失败。
+      - name: Build GUI binary (optional)
+        working-directory: ui/src-tauri
+        run: cargo build --release || echo "::warning::GUI 二进制可选,编译失败不阻塞发布(CLI 二进制已就绪)"
+
+      - name: Assemble dist zip
+        run: bash tools/build-dist.sh "${{ matrix.platform }}" dist
+
+      # CI 冒烟:解压 → 结构断言(脚本内已做)→ 有 mpv 则跑 1 帧
+      - name: Smoke test (unzip + mpv if available)
+        if: runner.os == 'Linux'
+        run: |
+          unzip -q dist/mpv-config-${{ matrix.platform }}-*.zip -d dist-check
+          echo "zip 顶层内容:"; ls dist-check
+          echo "app 层内容:"; ls dist-check/mpv-config | head -20
+          if command -v mpv >/dev/null 2>&1; then
+            mpv --config-dir="$PWD/dist-check/mpv-config" --no-video --frames=1 --no-terminal av://lavfi:testsrc2=size=64x64:rate=1:duration=1 \
+              || echo "::warning::mpv 冒烟失败,见上方日志(如缺字体/脚本依赖请记录)"
+          else
+            echo "runner 无 mpv,跳过播放冒烟"
+          fi
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          # 草稿发布:人工核对 changelog(下方 generate_release_notes 自动生成草稿)后再发布。
+          draft: true
+          generate_release_notes: true
+          files: dist/mpv-config-${{ matrix.platform }}-*.zip

@@ -29,6 +29,11 @@ PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为
    把生成的 `dist/` 内容放入 mpv 配置目录即可;播放中右键 uosc 菜单
    「方案」子菜单可随时切换方案(见 [uosc 联动](docs/uosc-integration.md))。
 
+> **GUI 二进制可选**:zip 内始终包含 CLI 二进制 `mpv-config`(`.exe`),GUI
+> 图形界面 `mpv-config-gui`(`.exe`)为可选附带(以 zip 分发为主,
+> `ui/src-tauri/tauri.conf.json` 的 `bundle.active` 保持 `false`,不产安装包)。
+> 两者同名产物不冲突:`gen`/`doctor`/`pkg` 走 CLI,图形界面仅作可视化入口。
+
 > 自行编辑配置文件时,注意编码格式应为 UTF-8,换行符为 Unix,否则 MPV
 > 可能无法识别。macOS 平台层标记 experimental,暂未真机验证。
 

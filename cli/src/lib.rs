@@ -5,3 +5,4 @@
 
 pub mod doctor;
 pub mod gen;
+pub mod pkg_cmds;

@@ -1,0 +1,14 @@
+# 由 `mpv-config pkg migrate-manager` 生成 - 请勿手动编辑。
+# 待安装记录(migrated: pending):`pkg install` 会克隆 source.git,
+# 按 whitelist/blacklist 展开具体文件清单,再写入 packages.lock。
+# version 0.0.0 为占位符(git 源无版本号)。
+name: evafast
+version: 0.0.0
+description: 从 manager.json 迁移:po5/evafast -> ~~/scripts
+platform: all
+source:
+  git: https://github.com/po5/evafast
+  branch: rewrite
+  whitelist: '%.lua$'
+  dest: ~~/scripts
+migrated: pending

@@ -1,0 +1,13 @@
+# 由 `mpv-config pkg migrate-manager` 生成 - 请勿手动编辑。
+# 待安装记录(migrated: pending):`pkg install` 会克隆 source.git,
+# 按 whitelist/blacklist 展开具体文件清单,再写入 packages.lock。
+# version 0.0.0 为占位符(git 源无版本号)。
+name: igv-a015fc88
+version: 0.0.0
+description: 从 manager.json 迁移:gist igv/a015fc88 -> ~~/shaders/igv
+platform: all
+source:
+  git: https://gist.github.com/igv/a015fc885d5c22e6891820ad89555637
+  whitelist: '%.glsl$'
+  dest: ~~/shaders/igv
+migrated: pending

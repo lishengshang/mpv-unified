@@ -1,0 +1,31 @@
+[
+  {
+    "git": "https://github.com/po5/evafast",
+    "branch": "rewrite",
+    "whitelist": "%.lua$",
+    "dest": "~~/scripts"
+  },
+  {
+    "git": "https://gist.github.com/igv/a015fc885d5c22e6891820ad89555637",
+    "whitelist": "%.glsl$",
+    "dest": "~~/shaders/igv"
+  },
+  {
+    "git": "https://github.com/bloc97/Anime4K",
+    "whitelist": "%.md$|%.glsl$",
+    "blacklist": "tensorflow",
+    "dest": "~~/shaders/Anime4k"
+  },
+  {
+    "git": "https://github.com/dyphire/mpv-scripts",
+    "branch": "main",
+    "blacklist": "LICENSE|README%.md$",
+    "dest": "~~/scripts"
+  },
+  {
+    "git": "https://github.com/Eisa01/mpv-scripts",
+    "branch": "master",
+    "whitelist": "undoredo%.lua$",
+    "dest": "~~/scripts"
+  }
+]

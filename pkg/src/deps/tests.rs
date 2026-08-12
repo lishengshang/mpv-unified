@@ -25,7 +25,7 @@ fn manifest(name: &str, requires: &[&str], conflicts: &[&str], files: &[&str]) -
     }
 }
 
-fn refs<'a>(ms: &'a [Manifest]) -> Vec<&'a Manifest> {
+fn refs(ms: &[Manifest]) -> Vec<&Manifest> {
     ms.iter().collect()
 }
 

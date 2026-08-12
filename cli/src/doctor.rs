@@ -1,13 +1,24 @@
 //! `doctor` subcommand: health checks for the repository layout.
 //!
-//! Currently ships `--upgrade-check`: read the local `VERSION` file and point
-//! the user at `docs/upgrade.md`. The full doctor suite (layer syntax, option
-//! validity, secret audit) lands in a later task.
+//! The full read-only suite — layer syntax, conditional directives,
+//! platform completeness, option validity against `mpv --list-options`,
+//! and a secret audit — is implemented by the [`files`], [`options`] and
+//! [`secrets`] submodules and orchestrated by [`run_with`]; the exit code
+//! (0 = healthy, 1 = errors, 2 = warnings only) is provided by
+//! [`DoctorReport::exit_code`]. `--upgrade-check` additionally reports the
+//! local `VERSION` file and points at `docs/upgrade.md`.
 
+mod files;
+mod options;
+mod secrets;
+
+use core::platform::{self, Platform};
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+
+pub use options::mpv_list_options;
 
 /// Local version read by the upgrade check.
 #[derive(Debug, PartialEq, Eq)]
@@ -89,6 +100,133 @@ pub fn upgrade_check(root: &Path) -> Result<String, UpgradeError> {
         "当前版本 {},升级说明见 docs/upgrade.md",
         local.version
     ))
+}
+
+/// Severity of one doctor finding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Severity {
+    /// A blocking problem (exit code 1).
+    Error,
+    /// A non-blocking problem (exit code 2).
+    Warning,
+}
+
+impl Severity {
+    /// Chinese label used in the human-readable report.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Error => "错误",
+            Self::Warning => "警告",
+        }
+    }
+}
+
+/// One problem found by a check, with its severity and message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    /// Severity of the problem.
+    pub severity: Severity,
+    /// Human-readable description (layer, line, pattern, ...).
+    pub message: String,
+}
+
+impl Finding {
+    pub(crate) fn error(message: String) -> Self {
+        Self {
+            severity: Severity::Error,
+            message,
+        }
+    }
+
+    pub(crate) fn warning(message: String) -> Self {
+        Self {
+            severity: Severity::Warning,
+            message,
+        }
+    }
+}
+
+/// Outcome of one doctor check: a summary line plus the problems found
+/// (empty findings mean the check passed).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckResult {
+    /// Check name, e.g. `语法检查`.
+    pub name: &'static str,
+    /// One-line outcome shown even when the check passed.
+    pub summary: String,
+    /// Problems found, in file order; empty when the check passed.
+    pub findings: Vec<Finding>,
+}
+
+/// Full doctor report over all checks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoctorReport {
+    /// Platform the checks were run against.
+    pub platform: Platform,
+    /// Check outcomes in report order.
+    pub checks: Vec<CheckResult>,
+}
+
+impl DoctorReport {
+    /// Number of error-severity findings across all checks.
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.count(Severity::Error)
+    }
+
+    /// Number of warning-severity findings across all checks.
+    #[must_use]
+    pub fn warning_count(&self) -> usize {
+        self.count(Severity::Warning)
+    }
+
+    /// Process exit code: 0 = healthy, 1 = has errors, 2 = warnings only.
+    #[must_use]
+    pub fn exit_code(&self) -> i32 {
+        if self.error_count() > 0 {
+            1
+        } else if self.warning_count() > 0 {
+            2
+        } else {
+            0
+        }
+    }
+
+    fn count(&self, severity: Severity) -> usize {
+        self.checks
+            .iter()
+            .flat_map(|check| &check.findings)
+            .filter(|finding| finding.severity == severity)
+            .count()
+    }
+}
+
+/// Run the full doctor suite against the repository root with the host
+/// platform and `mpv` from `PATH`.
+pub fn run(root: &Path) -> DoctorReport {
+    run_with(root, platform::detect(), &|| {
+        options::mpv_list_options("mpv")
+    })
+}
+
+/// Run the full doctor suite with an explicit platform and an injectable
+/// `mpv --list-options` source (tests substitute a mock).
+pub fn run_with<F: Fn() -> Option<String>>(
+    root: &Path,
+    platform: Platform,
+    options_source: &F,
+) -> DoctorReport {
+    DoctorReport {
+        platform,
+        checks: vec![
+            files::syntax_check(root),
+            files::cond_check(root, platform),
+            files::platform_check(root, platform),
+            options::check(root, platform, options_source),
+            secrets::check(root),
+        ],
+    }
 }
 
 #[cfg(test)]

@@ -1,9 +1,9 @@
 //! `mpv-config` binary: clap-driven subcommand framework.
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use cli::doctor;
+use cli::doctor::{self, CheckResult, DoctorReport};
 use cli::gen::{self, GenOptions};
-use core::platform::Platform;
+use core::platform::{self, Platform};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -21,7 +21,7 @@ struct Cli {
 enum Command {
     /// 读取 config/ 各层(base → 平台 → 包 → user),生成最终 mpv.conf 与 input.conf
     Gen(GenArgs),
-    /// 仓库健康检查(当前支持 --upgrade-check)
+    /// 只读自检:语法、条件指令、平台完整性、选项合法性、密钥审计
     Doctor(DoctorArgs),
 }
 
@@ -30,6 +30,10 @@ struct DoctorArgs {
     /// 检查本地 VERSION 并输出升级说明
     #[arg(long)]
     upgrade_check: bool,
+
+    /// mpv 可执行文件(--list-options 来源;缺省 "mpv")
+    #[arg(long, default_value = "mpv")]
+    mpv: String,
 }
 
 #[derive(Args, Debug)]
@@ -75,19 +79,57 @@ fn main() {
 }
 
 fn run_doctor(args: DoctorArgs) -> i32 {
-    if !args.upgrade_check {
-        eprintln!("doctor 完整自检尚未实现;当前可用:mpv-config doctor --upgrade-check");
-        return 1;
+    let root = doctor::check_root();
+    let report = doctor::run_with(&root, platform::detect(), &|| {
+        doctor::mpv_list_options(&args.mpv)
+    });
+    print_report(&report);
+    if args.upgrade_check {
+        match doctor::upgrade_check(&root) {
+            Ok(message) => println!("\n[升级检查] {message}"),
+            Err(error) => eprintln!("\n[升级检查] 错误: {error}"),
+        }
     }
-    match doctor::upgrade_check(&doctor::check_root()) {
-        Ok(message) => {
-            println!("{message}");
-            0
+    report.exit_code()
+}
+
+/// Print the human-readable doctor report (Chinese) and derive its status.
+fn print_report(report: &DoctorReport) {
+    println!("=== mpv-config doctor 检查报告 ===");
+    println!("目标平台:{}", report.platform.display_name());
+    for (index, check) in report.checks.iter().enumerate() {
+        println!(
+            "[{}/{}] {}: {}",
+            index + 1,
+            report.checks.len(),
+            check.name,
+            check_status(check)
+        );
+        println!("      {}", check.summary);
+        for finding in &check.findings {
+            println!("      - [{}] {}", finding.severity.label(), finding.message);
         }
-        Err(error) => {
-            eprintln!("错误: {error}");
-            1
-        }
+    }
+    let errors = report.error_count();
+    let warnings = report.warning_count();
+    println!("──────────────────────────────────────────────");
+    println!(
+        "结论:{errors} 错误,{warnings} 警告 → 退出码 {}",
+        report.exit_code()
+    );
+}
+
+fn check_status(check: &CheckResult) -> &'static str {
+    if check.findings.is_empty() {
+        "通过"
+    } else if check
+        .findings
+        .iter()
+        .any(|finding| finding.severity == doctor::Severity::Error)
+    {
+        "错误"
+    } else {
+        "警告"
     }
 }
 
@@ -198,5 +240,16 @@ mod tests {
             unreachable!("args parsed as doctor")
         };
         assert!(!args.upgrade_check);
+        assert_eq!(args.mpv, "mpv");
+    }
+
+    #[test]
+    fn doctor_mpv_path_flag_parses() {
+        let cli = Cli::try_parse_from(["mpv-config", "doctor", "--mpv", "/usr/bin/mpv"])
+            .expect("doctor --mpv parses");
+        let Command::Doctor(args) = cli.command else {
+            unreachable!("args parsed as doctor")
+        };
+        assert_eq!(args.mpv, "/usr/bin/mpv");
     }
 }

@@ -59,9 +59,9 @@
 ## CONVENTIONS
 
 - **注释无损是硬红线**:任何 conf 读改写必须经 `core::conf` 走 parse→serialize,字节级 round-trip;解析器测试锚定两份真实配置(346 行/110KB)
-- **生产代码零 panic**:禁止 `unwrap()/expect()/panic!` 于非测试代码(用 `ok_or/ok_or_else/unwrap_or` 与 typed error)
-- **文件 ≤250 纯 LOC**:超限必须拆模块(历史任务全遵守,clippy --all-targets 门禁)
-- **TDD**:核心逻辑先写测试;测试组织 = 模块内 `#[cfg(test)]` + core/tests、cli/tests、pkg/tests 集成
+- **生产代码零 panic**:禁止 `unwrap()/expect()/panic!` 于非测试代码(用 `ok_or/ok_or_else/unwrap_or` 与 typed error)。存量 7 处不变式 expect 已于 2026-08-12 清除(commit 44b512b);唯一例外:ui/src-tauri 的 Tauri main 出口样板
+- **文件 ≤250 纯 LOC(目标约定,非门禁)**:超限必须拆模块。**已知超限(存量)**:cli/src/main.rs(486)、pkg/src/manifest/mod.rs(357)、cli/src/pkg_cmds/lifecycle/update.rs(353)、cli/src/gen/mod.rs(337)、cli/src/pkg_cmds/migrate/mod.rs(333)、core/src/profiles.rs(322)、pkg/src/upgrade.rs(311)、cli/src/pkg_cmds/lifecycle/pending.rs(310)、pkg/src/fetch/package.rs(297)、cli/src/pkg_cmds/lifecycle/install.rs(289)、core/src/merge.rs(274) —— 新增代码仍守 250
+- **TDD**:核心逻辑先写测试;测试组织 = 模块内 `#[cfg(test)]`(core/cli/pkg 都在 src 内,如 pkg/src/deps/tests.rs、pkg/src/fetch/tests/) + 集成(core/tests/ 3 套、cli/tests/ 9 套含 common/ 共享 TestDir/Mock)
 - **Rust 风格**:edition 2021、纯 std 优先(网络用 curl 子进程、zip 用 unzip,不引重依赖)、typed error enum + Display 中文
 - **commit**:`<type>(<scope>): <summary>`(feat/fix/chore/refactor/docs);一个任务一个 commit;不 push(用户决定发布)
 - **配置分层优先级**:gui.conf > user.conf > 方案 > package > platform > base(合并引擎消费顺序)
@@ -100,4 +100,5 @@ cd ui && bun run tauri dev                      # GUI 开发
 - **包格式**:package.yaml(name/version/platform/requires/conflicts/files/config);manager.json 迁移产物在 packages/pending/(17 源,git 源待安装时展开)
 - **默认配置 = 用户自己的 110KB 配置**(拆分自 lishengshang/mpv-config fork);README 保留致谢,LICENSE.MD 继承 MIT
 - 完整决策记录(D1-D18):`.omo/drafts/mpv-config-manager.md`;执行计划:`.omo/plans/mpv-config-manager.md`(28/28 完成)
+- **决策会漂移**:D8(包商店按 CATEGORIES.md 11 类分组)已在实践中修订为"仅状态筛选"(证据 .omo/evidence/task-20);引用 D# 决策时交叉查 evidence
 - 已知非致命警告(冒烟时可见):simple_mpv_webui socket、history_bookmark gsub —— 不算失败

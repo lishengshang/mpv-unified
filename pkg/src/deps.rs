@@ -40,6 +40,10 @@ pub enum DepError {
         package_a: String,
         package_b: String,
     },
+    /// An internal invariant broke (e.g. the DFS walk stack emptied
+    /// unexpectedly). Unreachable given the resolution pre-checks, but
+    /// reported as an error instead of panicking.
+    Internal { message: String },
 }
 
 impl fmt::Display for DepError {
@@ -68,6 +72,7 @@ impl fmt::Display for DepError {
                 f,
                 "文件冲突: 包 \"{package_a}\" 的文件 \"{path}\" 与包 \"{package_b}\" 已安装路径重叠"
             ),
+            Self::Internal { message } => write!(f, "内部错误: {message}"),
         }
     }
 }
@@ -133,7 +138,10 @@ pub fn resolve_install_order(candidates: &[&Manifest]) -> Result<Vec<String>, De
         for required in &manifest.requires {
             let dep = by_name
                 .get(required.as_str())
-                .expect("missing deps checked above");
+                .ok_or_else(|| DepError::Missing {
+                    package: required.clone(),
+                    required_by: name.to_string(),
+                })?;
             match colors[dep.name.as_str()] {
                 Color::Black => {}
                 Color::Gray => {
@@ -153,7 +161,12 @@ pub fn resolve_install_order(candidates: &[&Manifest]) -> Result<Vec<String>, De
             }
         }
 
-        let finished = stack.pop().expect("stack is non-empty during walk");
+        // `name` was pushed at the top of this visit and every recursive
+        // visit pops what it pushed, so the stack is never empty here;
+        // the unreachable miss is reported as an error instead of panicking.
+        let finished = stack.pop().ok_or_else(|| DepError::Internal {
+            message: format!("依赖解析栈在遍历 {name} 时意外为空"),
+        })?;
         stack_pos.remove(finished);
         colors.insert(name, Color::Black);
         // Dependencies finish before their dependents, so finish order IS the

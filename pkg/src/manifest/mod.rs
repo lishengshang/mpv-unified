@@ -287,8 +287,14 @@ fn validate_name(name: &str) -> Result<(), PackageError> {
             format!("{name:?}: must be lowercase letters, digits, or hyphens"),
         ));
     }
-    let first = name.chars().next().expect("non-empty checked above");
-    let last = name.chars().next_back().expect("non-empty checked above");
+    let first = name
+        .chars()
+        .next()
+        .ok_or(PackageError::new("name", "must not be empty"))?;
+    let last = name
+        .chars()
+        .next_back()
+        .ok_or(PackageError::new("name", "must not be empty"))?;
     if !first.is_ascii_alphanumeric() || !last.is_ascii_alphanumeric() {
         return Err(PackageError::new(
             "name",
@@ -315,7 +321,9 @@ fn validate_dest(dest: &str) -> Result<(), PackageError> {
         ));
     }
     let mut components = rest.split('/');
-    let top = components.next().expect("rest is non-empty");
+    let top = components.next().ok_or_else(|| {
+        PackageError::new("dest", format!("{dest:?}: missing directory after `~~/`"))
+    })?;
     if !KNOWN_DEST_DIRS.contains(&top) {
         return Err(PackageError::new(
             "dest",

@@ -89,11 +89,8 @@ pub fn repo_root() -> PathBuf {
     ancestors
         .into_iter()
         .find(|dir| dir.join("config").join("base.conf").is_file())
-        .unwrap_or_else(|| {
-            cli_dir
-                .parent()
-                .expect("cli crate sits inside the workspace")
-        })
+        .or_else(|| cli_dir.parent())
+        .unwrap_or(cli_dir.as_path())
         .to_path_buf()
 }
 
@@ -317,7 +314,14 @@ fn write_output(
 ) -> Result<(), GenError> {
     let path = options.out.join(name);
     if !options.dry_run {
-        let parent = path.parent().expect("output path has a parent");
+        // `out.join(name)` always has a parent (every output name is a
+        // non-empty literal); the unreachable miss is reported as an error
+        // instead of panicking.
+        let parent = path.parent().ok_or_else(|| GenError::Io {
+            action: "创建输出目录",
+            path: options.out.clone(),
+            source: io::Error::new(io::ErrorKind::InvalidInput, "输出路径缺少父目录"),
+        })?;
         fs::create_dir_all(parent).map_err(|source| GenError::Io {
             action: "创建输出目录",
             path: parent.to_path_buf(),

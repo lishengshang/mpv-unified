@@ -50,8 +50,8 @@ fn has_at_least_30_tutorials() {
 fn every_tutorial_is_well_formed() {
     for slug in tutorial_slugs() {
         let path = tutorials_dir().join(format!("{slug}.md"));
-        let raw = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("读取 {slug}.md 失败:{error}"));
+        let raw =
+            fs::read_to_string(&path).unwrap_or_else(|error| panic!("读取 {slug}.md 失败:{error}"));
         let lines: Vec<&str> = raw.lines().collect();
 
         assert!(

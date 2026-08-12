@@ -2,7 +2,7 @@
 //! runtime value check in [`crate::options_gui::io`]).
 
 use super::table::RawOption;
-use super::{OptionsGuiError, invalid};
+use super::{invalid, OptionsGuiError};
 use crate::options_gui::table::OptionType;
 
 /// Map the YAML type string to an [`OptionType`], or `None` for unknown
@@ -153,7 +153,9 @@ pub(crate) fn validate_text_value(key: &str, value: &str) -> Result<String, Stri
         return Err(format!("选项 \"{key}\" 的值不能包含换行"));
     }
     if value.contains(" #") {
-        return Err(format!("选项 \"{key}\" 的值不能包含 \" #\"(会被解析为行内注释)"));
+        return Err(format!(
+            "选项 \"{key}\" 的值不能包含 \" #\"(会被解析为行内注释)"
+        ));
     }
     if value.matches('"').count() % 2 != 0 || value.matches('\'').count() % 2 != 0 {
         return Err(format!("选项 \"{key}\" 的值引号未闭合"));

@@ -114,7 +114,10 @@ pub fn parse_yaml(text: &str) -> Result<OptionsTable, OptionsGuiError> {
         if key.is_empty() {
             return Err(invalid(format!("第 {position} 个选项的 key 不能为空")));
         }
-        if key.chars().any(|c| c.is_whitespace() || matches!(c, '=' | '#' | '[' | ']')) {
+        if key
+            .chars()
+            .any(|c| c.is_whitespace() || matches!(c, '=' | '#' | '[' | ']'))
+        {
             return Err(invalid(format!(
                 "选项 key 不能包含空白或 = # [ ] 字符:\"{key}\""
             )));
@@ -151,8 +154,7 @@ pub fn parse_yaml(text: &str) -> Result<OptionsTable, OptionsGuiError> {
             .map(scalar_to_string)
             .ok_or_else(|| invalid(format!("选项 \"{key}\" 缺少 default")))?;
 
-        let (min, max) =
-            validate_number_bounds(key.as_str(), type_, raw_option)?;
+        let (min, max) = validate_number_bounds(key.as_str(), type_, raw_option)?;
         let choices = validate_select(key.as_str(), type_, raw_option, default.as_str())?;
         validate_default_type(key.as_str(), type_, &default, min, max, &choices)?;
 

@@ -59,8 +59,7 @@ pub fn save_user_conf(content: String) -> Result<(), String> {
 }
 
 fn save_user_conf_at(root: &Path, content: &str) -> Result<(), String> {
-    let doc = conf::parse(content)
-        .map_err(|error| format!("user.conf 校验失败:{error}"))?;
+    let doc = conf::parse(content).map_err(|error| format!("user.conf 校验失败:{error}"))?;
     // Round-trip guard: the parser guarantees byte-exact round-trip for
     // every document it accepts; assert it explicitly so a future parser
     // regression can never silently rewrite the user's file.
@@ -72,12 +71,8 @@ fn save_user_conf_at(root: &Path, content: &str) -> Result<(), String> {
     fs::create_dir_all(&user_dir)
         .map_err(|source| format!("创建 user 目录失败:{}", describe_io(&source)))?;
     let tmp = user_dir.join(".user.conf.tmp");
-    fs::write(&tmp, content).map_err(|source| {
-        format!(
-            "写入临时文件失败:{} (源文件未受影响)",
-            describe_io(&source)
-        )
-    })?;
+    fs::write(&tmp, content)
+        .map_err(|source| format!("写入临时文件失败:{} (源文件未受影响)", describe_io(&source)))?;
     fs::rename(&tmp, &path).map_err(|source| {
         let _ = fs::remove_file(&tmp);
         format!("写入 user/user.conf 失败:{}", describe_io(&source))
@@ -124,7 +119,10 @@ pub fn get_tutorial(slug: String) -> Result<String, String> {
     if !valid_slug(&slug) {
         return Err(format!("非法的教程标识:{slug}"));
     }
-    let path = repo_root().join("docs").join("tutorials").join(format!("{slug}.md"));
+    let path = repo_root()
+        .join("docs")
+        .join("tutorials")
+        .join(format!("{slug}.md"));
     fs::read_to_string(&path).map_err(|source| {
         if source.kind() == std::io::ErrorKind::NotFound {
             format!("未找到教程:{slug}")
@@ -147,7 +145,9 @@ fn valid_slug(slug: &str) -> bool {
 /// structurally broken tutorial still lists, with the slug as fallback).
 fn read_title(path: &Path) -> Option<String> {
     let raw = fs::read_to_string(path).ok()?;
-    raw.lines().find_map(|line| line.strip_prefix("# ")).map(str::to_owned)
+    raw.lines()
+        .find_map(|line| line.strip_prefix("# "))
+        .map(str::to_owned)
 }
 
 fn describe_io(source: &std::io::Error) -> String {
@@ -178,7 +178,10 @@ mod tests {
 
         let saved = fs::read_to_string(user_conf_path(&root)).expect("file exists after save");
         assert_eq!(saved, content, "round-trip must be byte-identical");
-        assert!(!root.join("user").join(".user.conf.tmp").exists(), "no temp file left");
+        assert!(
+            !root.join("user").join(".user.conf.tmp").exists(),
+            "no temp file left"
+        );
     }
 
     #[test]
@@ -189,11 +192,20 @@ mod tests {
         let bad = "volume=80\nsub-font-size='44\n";
 
         let error = save_user_conf_at(&root, bad).expect_err("unclosed quote must fail");
-        assert!(error.contains("line 2"), "error must carry the line number: {error}");
-        assert!(error.contains("quote"), "error must name the cause: {error}");
+        assert!(
+            error.contains("line 2"),
+            "error must carry the line number: {error}"
+        );
+        assert!(
+            error.contains("quote"),
+            "error must name the cause: {error}"
+        );
         let on_disk = fs::read_to_string(user_conf_path(&root)).expect("file still readable");
         assert_eq!(on_disk, original, "file must be untouched on failure");
-        assert!(!root.join("user").join(".user.conf.tmp").exists(), "no temp file left");
+        assert!(
+            !root.join("user").join(".user.conf.tmp").exists(),
+            "no temp file left"
+        );
     }
 
     #[test]
@@ -203,7 +215,10 @@ mod tests {
 
         save_user_conf_at(&root, content).expect("first save creates the file");
 
-        assert!(user_conf_path(&root).is_file(), "user.conf must exist after first save");
+        assert!(
+            user_conf_path(&root).is_file(),
+            "user.conf must exist after first save"
+        );
         assert_eq!(
             fs::read_to_string(user_conf_path(&root)).expect("read back"),
             content

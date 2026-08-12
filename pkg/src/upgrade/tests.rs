@@ -63,8 +63,7 @@ fn check_update_reports_new_version() {
 fn check_update_reports_no_update_information_without_latest_version() {
     let root = TempDir::new("check-root");
     write(&root.path().join("VERSION"), "0.1.0");
-    let fetcher = MockFetcher::new()
-        .with(INDEX_URL, br#"{"packages":[]}"#.to_vec());
+    let fetcher = MockFetcher::new().with(INDEX_URL, br#"{"packages":[]}"#.to_vec());
 
     let info = check_update(&fetcher, INDEX_URL, root.path());
 
@@ -130,7 +129,10 @@ fn upgrade_replaces_app_layer_and_preserves_user_layer() {
     assert!(result.message.contains("升级成功"), "{}", result.message);
 
     let app = root.path();
-    assert_eq!(fs::read_to_string(app.join("config/base.conf")).expect("base"), "base v2");
+    assert_eq!(
+        fs::read_to_string(app.join("config/base.conf")).expect("base"),
+        "base v2"
+    );
     assert_eq!(
         fs::read_to_string(app.join("scripts/a.lua")).expect("a"),
         "script a v2"
@@ -139,7 +141,10 @@ fn upgrade_replaces_app_layer_and_preserves_user_layer() {
         fs::read_to_string(app.join("scripts/b.lua")).expect("b"),
         "script b new"
     );
-    assert_eq!(fs::read_to_string(app.join("VERSION")).expect("version"), "0.2.0");
+    assert_eq!(
+        fs::read_to_string(app.join("VERSION")).expect("version"),
+        "0.2.0"
+    );
 
     assert_eq!(
         fs::read_to_string(app.join("user/user.conf")).expect("user conf"),
@@ -157,7 +162,10 @@ fn upgrade_replaces_app_layer_and_preserves_user_layer() {
         fs::read_to_string(backup.join("config/base.conf")).expect("backup base"),
         "base v1"
     );
-    assert_eq!(fs::read_to_string(backup.join("VERSION")).expect("backup version"), "0.1.0");
+    assert_eq!(
+        fs::read_to_string(backup.join("VERSION")).expect("backup version"),
+        "0.1.0"
+    );
     assert!(cache.path().join("upgrade/mpv-config-0.2.0.zip").is_file());
 }
 
@@ -177,8 +185,14 @@ fn upgrade_rejects_corrupt_zip_and_rolls_back() {
     assert!(result.message.contains("还原"), "{}", result.message);
 
     let app = root.path();
-    assert_eq!(fs::read_to_string(app.join("config/base.conf")).expect("base"), "base v1");
-    assert_eq!(fs::read_to_string(app.join("scripts/a.lua")).expect("a"), "script a v1");
+    assert_eq!(
+        fs::read_to_string(app.join("config/base.conf")).expect("base"),
+        "base v1"
+    );
+    assert_eq!(
+        fs::read_to_string(app.join("scripts/a.lua")).expect("a"),
+        "script a v1"
+    );
     assert_eq!(
         fs::read_to_string(app.join("user/user.conf")).expect("user conf"),
         "user-conf-secret"

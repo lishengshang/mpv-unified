@@ -194,18 +194,18 @@ fn validate_value_checks_select_switch_and_unknown_key() {
         options_gui::validate_value(&table, "hwdec", "no").expect("choice"),
         "no"
     );
-    let error = options_gui::validate_value(&table, "hwdec", "magic")
-        .expect_err("unknown choice rejected");
+    let error =
+        options_gui::validate_value(&table, "hwdec", "magic").expect_err("unknown choice rejected");
     assert!(error.contains("可选值"), "{error}");
     assert_eq!(
         options_gui::validate_value(&table, "deband", "yes").expect("switch"),
         "yes"
     );
-    let error = options_gui::validate_value(&table, "deband", "on")
-        .expect_err("non-switch value rejected");
+    let error =
+        options_gui::validate_value(&table, "deband", "on").expect_err("non-switch value rejected");
     assert!(error.contains("yes 或 no"), "{error}");
-    let error = options_gui::validate_value(&table, "ghost", "1")
-        .expect_err("unknown key rejected");
+    let error =
+        options_gui::validate_value(&table, "ghost", "1").expect_err("unknown key rejected");
     assert!(error.contains("未知选项"), "{error}");
 }
 

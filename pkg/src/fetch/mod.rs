@@ -33,8 +33,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::index::Index;
 pub(crate) use error::io_error;
-pub(crate) use package::extract;
 pub use error::FetchError;
+pub(crate) use package::extract;
 pub use package::{fetch_package, PackageArchive};
 
 /// Default remote index URL: the official index repository's latest release

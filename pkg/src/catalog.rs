@@ -223,7 +223,9 @@ mod tests {
         LockEntry {
             name: name.to_owned(),
             version: version.to_owned(),
-            files: (0..files).map(|i| format!("scripts/{name}-{i}.lua")).collect(),
+            files: (0..files)
+                .map(|i| format!("scripts/{name}-{i}.lua"))
+                .collect(),
             config_d: false,
         }
     }
@@ -254,9 +256,7 @@ mod tests {
     }
 
     fn lock_with(entries: Vec<LockEntry>) -> LockFile {
-        LockFile {
-            packages: entries,
-        }
+        LockFile { packages: entries }
     }
 
     #[test]
@@ -384,7 +384,11 @@ mod tests {
 
     #[test]
     fn sort_is_alphabetic_by_name() {
-        let index = vec![index_entry("zebra"), index_entry("alpha"), index_entry("mango")];
+        let index = vec![
+            index_entry("zebra"),
+            index_entry("alpha"),
+            index_entry("mango"),
+        ];
         let catalog = build(&lock_with(vec![]), &[], &[], &index);
         let names: Vec<&str> = catalog.iter().map(|row| row.name.as_str()).collect();
         assert_eq!(names, vec!["alpha", "mango", "zebra"]);

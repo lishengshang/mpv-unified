@@ -94,38 +94,52 @@ fn write_only_persists_non_default_values_with_header() {
     let dir = user_dir("write-non-default");
     let values = vec![
         ("sub-font-size".to_owned(), "55".to_owned()), // default → skipped
-        ("sub-font-size".to_owned(), "44".to_owned()),  // later occurrence wins
-        ("deband".to_owned(), "no".to_owned()),         // default → skipped
-        ("hwdec".to_owned(), "no".to_owned()),          // non-default → written
+        ("sub-font-size".to_owned(), "44".to_owned()), // later occurrence wins
+        ("deband".to_owned(), "no".to_owned()),        // default → skipped
+        ("hwdec".to_owned(), "no".to_owned()),         // non-default → written
     ];
     options_gui::write_gui_conf(&table, &dir, &values).expect("write succeeds");
     let text = fs::read_to_string(dir.join(options_gui::GUI_CONF_FILE)).expect("read fragment");
     assert!(text.starts_with("# 由 mpv-config GUI 管理\n\n"), "{text}");
     assert!(text.contains("sub-font-size=44"), "{text}");
     assert!(text.contains("hwdec=no"), "{text}");
-    assert!(!text.contains("deband="), "default switch not written: {text}");
+    assert!(
+        !text.contains("deband="),
+        "default switch not written: {text}"
+    );
     let roundtrip = core::conf::parse(&text).expect("fragment parses");
     assert_eq!(core::conf::serialize(&roundtrip), text);
     let entries: Vec<String> = fs::read_dir(&dir)
         .expect("list dir")
         .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
         .collect();
-    assert!(!entries.iter().any(|n| n.contains(".tmp")), "atomic: {entries:?}");
+    assert!(
+        !entries.iter().any(|n| n.contains(".tmp")),
+        "atomic: {entries:?}"
+    );
 }
 
 #[test]
 fn write_preserves_comments_across_rewrites() {
     let table = valid_table();
     let dir = user_dir("roundtrip");
-    options_gui::write_gui_conf(&table, &dir, &[("sub-font-size".to_owned(), "44".to_owned())])
-        .expect("first write");
+    options_gui::write_gui_conf(
+        &table,
+        &dir,
+        &[("sub-font-size".to_owned(), "44".to_owned())],
+    )
+    .expect("first write");
     fs::write(
         dir.join(options_gui::GUI_CONF_FILE),
         "# 由 mpv-config GUI 管理\n\n# 我的注释\nsub-font-size=44 # 行内注释\n",
     )
     .expect("seed comments");
-    options_gui::write_gui_conf(&table, &dir, &[("sub-font-size".to_owned(), "48".to_owned())])
-        .expect("second write");
+    options_gui::write_gui_conf(
+        &table,
+        &dir,
+        &[("sub-font-size".to_owned(), "48".to_owned())],
+    )
+    .expect("second write");
     let text = fs::read_to_string(dir.join(options_gui::GUI_CONF_FILE)).expect("read fragment");
     assert!(text.contains("# 我的注释"), "comments preserved: {text}");
     assert!(text.contains("sub-font-size=48 # 行内注释"), "{text}");
@@ -167,8 +181,12 @@ fn write_removes_reset_keys_and_preserves_unknown_manual_keys() {
     )
     .expect("seed fragment");
     // sub-font-size reset to its default → dropped; manual key kept.
-    options_gui::write_gui_conf(&table, &dir, &[("sub-font-size".to_owned(), "55".to_owned())])
-        .expect("write succeeds");
+    options_gui::write_gui_conf(
+        &table,
+        &dir,
+        &[("sub-font-size".to_owned(), "55".to_owned())],
+    )
+    .expect("write succeeds");
     let text = fs::read_to_string(dir.join(options_gui::GUI_CONF_FILE)).expect("read fragment");
     assert!(!text.contains("sub-font-size"), "{text}");
     assert!(text.contains("manual-key=keep-me"), "{text}");
@@ -251,9 +269,19 @@ fn real_table_save_sub_font_size_44_writes_single_line() {
     let text = fs::read_to_string(dir.join(options_gui::GUI_CONF_FILE)).expect("read gui.conf");
     assert!(text.starts_with("# 由 mpv-config GUI 管理\n\n"), "{text}");
     assert!(text.contains("sub-font-size=44"), "{text}");
-    assert!(!text.contains("volume="), "default volume must not be written: {text}");
-    assert!(!text.contains("deband="), "default deband must not be written: {text}");
-    assert_eq!(text.lines().count(), 3, "header + blank + one option: {text}");
+    assert!(
+        !text.contains("volume="),
+        "default volume must not be written: {text}"
+    );
+    assert!(
+        !text.contains("deband="),
+        "default deband must not be written: {text}"
+    );
+    assert_eq!(
+        text.lines().count(),
+        3,
+        "header + blank + one option: {text}"
+    );
     // The fragment survives the lossless parser round-trip and reads back.
     assert_eq!(
         options_gui::read_gui_conf(&dir).expect("read back"),

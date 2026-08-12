@@ -149,7 +149,9 @@ pub fn regenerate() -> Result<RegenSummary, String> {
 /// scripts/uosc/main.lua) — drives the "uosc 联动" status on the Help page.
 #[tauri::command]
 pub fn uosc_status() -> Result<bool, String> {
-    Ok(mpv_core::uosc::detect_installed(&cli::gen::repo_root().join("scripts")))
+    Ok(mpv_core::uosc::detect_installed(
+        &cli::gen::repo_root().join("scripts"),
+    ))
 }
 
 /// Every curated option of the "配置" page (from `config/options-gui.yaml`).
@@ -190,9 +192,7 @@ pub fn reset_gui_value(key: String) -> Result<(), String> {
     let user_dir = root.join("user");
     let table = mpv_core::options_gui::OptionsTable::load(&root.join("config/options-gui.yaml"))
         .map_err(|error| format!("读取选项表失败:{error}"))?;
-    table
-        .find(&key)
-        .ok_or_else(|| format!("未知选项:{key}"))?;
+    table.find(&key).ok_or_else(|| format!("未知选项:{key}"))?;
     let values: Vec<(String, String)> = mpv_core::options_gui::read_gui_conf(&user_dir)
         .map_err(|error| format!("读取已保存配置失败:{error}"))?
         .into_iter()

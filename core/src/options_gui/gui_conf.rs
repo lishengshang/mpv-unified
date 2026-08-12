@@ -1,6 +1,8 @@
 //! Read/write of the GUI fragment `user/gui.conf`.
 
-use super::{GUI_CONF_FILE, HEADER_COMMENT, OptionsGuiError, OptionsTable, invalid, validate_value};
+use super::{
+    invalid, validate_value, OptionsGuiError, OptionsTable, GUI_CONF_FILE, HEADER_COMMENT,
+};
 use crate::conf::{self, ConfDoc, Entry};
 use std::fs;
 use std::io;
@@ -113,9 +115,9 @@ pub fn write_gui_conf(
     }
 
     // 4. Ensure the managed-file header comment sits on the first line.
-    let has_header = result.iter().any(|entry| {
-        matches!(entry, Entry::Comment { text } if text.contains("由 mpv-config GUI 管理"))
-    });
+    let has_header = result.iter().any(
+        |entry| matches!(entry, Entry::Comment { text } if text.contains("由 mpv-config GUI 管理")),
+    );
     if !has_header {
         result.insert(
             0,
@@ -123,9 +125,12 @@ pub fn write_gui_conf(
                 text: HEADER_COMMENT.to_owned(),
             },
         );
-        result.insert(1, Entry::Blank {
-            raw_line: String::new(),
-        });
+        result.insert(
+            1,
+            Entry::Blank {
+                raw_line: String::new(),
+            },
+        );
     }
     doc.entries = result;
     doc.ends_with_newline = true;

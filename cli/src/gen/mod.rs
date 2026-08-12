@@ -159,15 +159,13 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     // 最后一个层叠加(user.conf 之后),同名键由 gui 层覆盖。手动编辑的
     // user.conf 内容原样保留;缺失时静默跳过。
     let merged = match gui.as_ref() {
-        Some(gui) => {
-            merge(vec![MergeLayer::new("user/gui.conf", merged), gui.clone()]).map_err(
-                |merge_error| GenError::Parse {
-                    layer: merge_error.layer,
-                    line: merge_error.line,
-                    message: merge_error.message,
-                },
-            )?
-        }
+        Some(gui) => merge(vec![MergeLayer::new("user/gui.conf", merged), gui.clone()]).map_err(
+            |merge_error| GenError::Parse {
+                layer: merge_error.layer,
+                line: merge_error.line,
+                message: merge_error.message,
+            },
+        )?,
         None => merged,
     };
 
@@ -187,7 +185,14 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
                     mpv_text.push('\n');
                 }
                 mpv_text.push_str(&blocks);
-                uosc_menu_lines = uosc_patch(root, options, &profiles, &enabled_ids, &mut warnings, &mut files)?;
+                uosc_menu_lines = uosc_patch(
+                    root,
+                    options,
+                    &profiles,
+                    &enabled_ids,
+                    &mut warnings,
+                    &mut files,
+                )?;
             }
         }
     }
@@ -255,9 +260,7 @@ fn profile_blocks(
     let enabled = match core::profiles::effective_enabled(&root.join("user")) {
         Ok(enabled) => enabled,
         Err(error) => {
-            warnings.push(format!(
-                "读取方案启用状态失败,已跳过方案块:{error}"
-            ));
+            warnings.push(format!("读取方案启用状态失败,已跳过方案块:{error}"));
             return Ok(None);
         }
     };

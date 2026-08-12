@@ -137,9 +137,7 @@ fn read_pending(root: &Path) -> Vec<PendingMeta> {
         .filter_map(std::result::Result::ok)
         .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
-        .filter_map(|path| {
-            cli::pkg_cmds::lifecycle::pending::PendingRecord::parse_file(&path).ok()
-        })
+        .filter_map(|path| cli::pkg_cmds::lifecycle::pending::PendingRecord::parse_file(&path).ok())
         .map(|record| PendingMeta {
             name: record.name,
             version: record.version,

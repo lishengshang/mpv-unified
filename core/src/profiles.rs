@@ -281,11 +281,8 @@ pub fn write_state(user_dir: &Path, enabled_ids: &[String]) -> Result<(), Profil
     })?;
     let path = user_dir.join(STATE_FILE);
     let tmp = user_dir.join(format!("{STATE_FILE}.tmp"));
-    let json = serde_json::to_string(enabled_ids).map_err(|error| {
-        invalid(format!(
-            "序列化方案启用状态失败(不可能发生):{error}"
-        ))
-    })?;
+    let json = serde_json::to_string(enabled_ids)
+        .map_err(|error| invalid(format!("序列化方案启用状态失败(不可能发生):{error}")))?;
     fs::write(&tmp, json).map_err(|source| ProfilesError::Io {
         action: "写入",
         path: tmp.clone(),
@@ -389,34 +386,27 @@ profiles:
 
     #[test]
     fn duplicate_ids_are_rejected() {
-        let error = parse_yaml(
-            "profiles:\n  - id: dup\n    name: A\n  - id: dup\n    name: B\n",
-        )
-        .expect_err("duplicate id rejected");
+        let error = parse_yaml("profiles:\n  - id: dup\n    name: A\n  - id: dup\n    name: B\n")
+            .expect_err("duplicate id rejected");
         assert!(error.to_string().contains("重复"), "{error}");
     }
 
     #[test]
     fn non_string_option_is_a_yaml_error() {
-        let error = parse_yaml(
-            "profiles:\n  - id: a\n    name: A\n    options:\n      - 42\n",
-        )
-        .expect_err("integer option rejected");
+        let error = parse_yaml("profiles:\n  - id: a\n    name: A\n    options:\n      - 42\n")
+            .expect_err("integer option rejected");
         assert!(error.to_string().contains("不是字符串"), "{error}");
     }
 
     #[test]
     fn empty_or_multiline_options_are_rejected() {
-        let error = parse_yaml(
-            "profiles:\n  - id: a\n    name: A\n    options:\n      - \"\"\n",
-        )
-        .expect_err("empty option rejected");
+        let error = parse_yaml("profiles:\n  - id: a\n    name: A\n    options:\n      - \"\"\n")
+            .expect_err("empty option rejected");
         assert!(error.to_string().contains("选项为空"), "{error}");
 
-        let error = parse_yaml(
-            "profiles:\n  - id: a\n    name: A\n    options:\n      - \"x=1\\ny=2\"\n",
-        )
-        .expect_err("multiline option rejected");
+        let error =
+            parse_yaml("profiles:\n  - id: a\n    name: A\n    options:\n      - \"x=1\\ny=2\"\n")
+                .expect_err("multiline option rejected");
         assert!(error.to_string().contains("换行"), "{error}");
     }
 
@@ -467,7 +457,10 @@ profiles:
     #[test]
     fn missing_state_file_reads_as_empty() {
         let dir = user_dir("missing");
-        assert_eq!(read_state(&dir).expect("read succeeds"), Vec::<String>::new());
+        assert_eq!(
+            read_state(&dir).expect("read succeeds"),
+            Vec::<String>::new()
+        );
         assert!(!dir.exists(), "read must not create the directory");
     }
 
@@ -476,7 +469,10 @@ profiles:
         let dir = user_dir("corrupt");
         fs::create_dir_all(&dir).expect("create dir");
         fs::write(dir.join(STATE_FILE), "{ not json !!").expect("write corrupt state");
-        assert_eq!(read_state(&dir).expect("no error on corrupt state"), Vec::<String>::new());
+        assert_eq!(
+            read_state(&dir).expect("no error on corrupt state"),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
@@ -493,7 +489,10 @@ profiles:
             !entries.iter().any(|name| name.contains(".tmp")),
             "tmp file must not remain: {entries:?}"
         );
-        assert_eq!(serde_json::to_string(&ids).expect("json"), "[\"cinema\",\"music\"]");
+        assert_eq!(
+            serde_json::to_string(&ids).expect("json"),
+            "[\"cinema\",\"music\"]"
+        );
     }
 
     #[test]
@@ -513,6 +512,9 @@ profiles:
         );
         // An explicit empty state disables everything — no default.
         write_state(&dir, &[]).expect("write empty state");
-        assert_eq!(effective_enabled(&dir).expect("explicit state wins"), Vec::<String>::new());
+        assert_eq!(
+            effective_enabled(&dir).expect("explicit state wins"),
+            Vec::<String>::new()
+        );
     }
 }

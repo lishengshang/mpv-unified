@@ -23,7 +23,7 @@ mod validate;
 
 pub use gui_conf::{read_gui_conf, write_gui_conf};
 pub use ops::validate_value;
-pub use table::{CATEGORIES, GuiOption, OptionType, OptionsTable, parse_yaml};
+pub use table::{parse_yaml, GuiOption, OptionType, OptionsTable, CATEGORIES};
 
 use std::fmt;
 use std::io;

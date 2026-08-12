@@ -357,12 +357,12 @@ fn gui_conf_overrides_user_conf_in_generated_output() {
     let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
     // Every layer's lines survive (comment-preserving merge); the LAST
     // occurrence is the effective one, and it must come from gui.conf.
-    let last = mpv
-        .lines()
-        .rev()
-        .find(|l| l.starts_with("sub-font-size="));
+    let last = mpv.lines().rev().find(|l| l.starts_with("sub-font-size="));
     assert_eq!(last, Some("sub-font-size=44"), "{mpv}");
-    assert!(mpv.contains("# 手动配置"), "user.conf comment preserved: {mpv}");
+    assert!(
+        mpv.contains("# 手动配置"),
+        "user.conf comment preserved: {mpv}"
+    );
     assert!(
         mpv.contains("# 由 mpv-config GUI 管理"),
         "gui.conf comment preserved: {mpv}"
@@ -385,10 +385,7 @@ fn gui_conf_missing_means_user_conf_wins() {
     .expect("generation without gui.conf succeeds");
 
     let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
-    let last = mpv
-        .lines()
-        .rev()
-        .find(|l| l.starts_with("sub-font-size="));
+    let last = mpv.lines().rev().find(|l| l.starts_with("sub-font-size="));
     assert_eq!(last, Some("sub-font-size=50"), "{mpv}");
 }
 
@@ -464,10 +461,7 @@ fn gen_appends_enabled_profile_blocks_to_mpv_conf() {
     .expect("generation with profiles succeeds");
 
     assert!(
-        report
-            .warnings
-            .iter()
-            .all(|w| !w.contains("方案块")),
+        report.warnings.iter().all(|w| !w.contains("方案块")),
         "no profile-block warnings on the happy path: {:?}",
         report.warnings
     );
@@ -478,9 +472,12 @@ fn gen_appends_enabled_profile_blocks_to_mpv_conf() {
     assert!(mpv.contains(
         "# 方案:高清观影 (由 mpv-config 生成)\n[cinema]\nprofile-restore=copy-equal\ndeband=yes\n"
     ), "{mpv}");
-    assert!(mpv.contains(
-        "# 方案:音乐模式 (由 mpv-config 生成)\n[music]\nprofile-restore=copy-equal\nvo=null\n"
-    ), "{mpv}");
+    assert!(
+        mpv.contains(
+            "# 方案:音乐模式 (由 mpv-config 生成)\n[music]\nprofile-restore=copy-equal\nvo=null\n"
+        ),
+        "{mpv}"
+    );
     assert!(mpv.ends_with("profile=cinema\nprofile=music\n"), "{mpv}");
     // The appended region still parses as mpv.conf.
     let doc = core::conf::parse(&mpv).expect("output with profile blocks must parse");
@@ -509,17 +506,17 @@ fn gen_defaults_to_cinema_profile_when_state_is_missing() {
     .expect("first-run generation succeeds");
 
     let mpv = fs::read_to_string(out.path().join("dist/mpv.conf")).expect("read mpv output");
-    assert!(mpv.contains("[cinema]\nprofile-restore=copy-equal\n"), "{mpv}");
+    assert!(
+        mpv.contains("[cinema]\nprofile-restore=copy-equal\n"),
+        "{mpv}"
+    );
     assert!(mpv.contains("profile=cinema"), "{mpv}");
     assert!(
         !root.path().join("user/profiles-state.json").exists(),
         "gen reads state but must not write it"
     );
     assert!(
-        report
-            .warnings
-            .iter()
-            .all(|w| !w.contains("方案块")),
+        report.warnings.iter().all(|w| !w.contains("方案块")),
         "{:?}",
         report.warnings
     );
@@ -582,10 +579,7 @@ fn missing_profiles_yaml_is_skipped_silently() {
     .expect("generation without profiles.yaml succeeds");
 
     assert!(
-        report
-            .warnings
-            .iter()
-            .all(|w| !w.contains("方案")),
+        report.warnings.iter().all(|w| !w.contains("方案")),
         "missing profiles.yaml must not warn: {:?}",
         report.warnings
     );
@@ -598,7 +592,10 @@ fn gen_emits_uosc_menu_patch_and_input_lines_when_uosc_installed() {
         &root.path().join("config/profiles.yaml"),
         "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
     );
-    write(&root.path().join("user/profiles-state.json"), "[\"cinema\"]\n");
+    write(
+        &root.path().join("user/profiles-state.json"),
+        "[\"cinema\"]\n",
+    );
     write(&root.path().join("scripts/uosc/main.lua"), "-- uosc\n");
     write(
         &root.path().join("script-opts/uosc.conf"),
@@ -613,10 +610,7 @@ fn gen_emits_uosc_menu_patch_and_input_lines_when_uosc_installed() {
     .expect("generation with uosc installed succeeds");
 
     assert!(
-        report
-            .warnings
-            .iter()
-            .all(|w| !w.contains("未检测到 uosc")),
+        report.warnings.iter().all(|w| !w.contains("未检测到 uosc")),
         "no uosc warnings on the happy path: {:?}",
         report.warnings
     );
@@ -650,7 +644,10 @@ fn gen_warns_and_skips_uosc_patch_when_uosc_missing() {
         &root.path().join("config/profiles.yaml"),
         "profiles:\n  - id: cinema\n    name: 高清观影\n    options:\n      - \"deband=yes\"\n    requires: []\n",
     );
-    write(&root.path().join("user/profiles-state.json"), "[\"cinema\"]\n");
+    write(
+        &root.path().join("user/profiles-state.json"),
+        "[\"cinema\"]\n",
+    );
     write(&root.path().join("config/input.conf"), "A cycle audio\n");
     let out = TestDir::new("uosc-missing-out");
 

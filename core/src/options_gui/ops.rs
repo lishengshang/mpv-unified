@@ -71,9 +71,7 @@ pub fn validate_value(table: &OptionsTable, key: &str, value: &str) -> Result<St
                 return Err(format!("选项表损坏:number 选项 \"{key}\" 缺少 min/max"));
             };
             if !(min..=max).contains(&number) {
-                return Err(format!(
-                    "选项 \"{key}\" 超出范围 {min}~{max},收到:{value}"
-                ));
+                return Err(format!("选项 \"{key}\" 超出范围 {min}~{max},收到:{value}"));
             }
             Ok(value.to_owned())
         }

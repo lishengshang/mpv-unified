@@ -149,10 +149,7 @@ profiles:
     fn single_enabled_profile_emits_apply_profile_menu_item() {
         let profiles = profiles();
         let menu = generate_menu_lines(&profiles, &ids(&["cinema"]));
-        assert_eq!(
-            menu,
-            "#  apply-profile cinema  #menu: 方案 > 高清观影\n"
-        );
+        assert_eq!(menu, "#  apply-profile cinema  #menu: 方案 > 高清观影\n");
         let patch = generate_uosc_conf(&profiles, &ids(&["cinema"]));
         assert!(patch.contains("uosc 方案切换菜单补丁"), "{patch}");
         assert!(patch.contains("apply-profile cinema"), "{patch}");
@@ -192,15 +189,15 @@ profiles:
         std::fs::write(dir.join("uosc/main.lua"), "-- uosc").expect("write main.lua");
         assert!(detect_installed(&dir), "uosc 5.x folder layout detected");
         std::fs::write(dir.join("uosc.lua"), "-- uosc").expect("write uosc.lua");
-        assert!(
-            detect_installed(&dir),
-            "single-file layout detected"
-        );
+        assert!(detect_installed(&dir), "single-file layout detected");
         // A stray uosc.conf without the script must not count.
         let conf_only = scripts_dir("conf-only");
         std::fs::create_dir_all(&conf_only).expect("create dir");
         std::fs::write(conf_only.join("uosc.conf"), "timeline_style=bar\n")
             .expect("write stray conf");
-        assert!(!detect_installed(&conf_only), "conf without script is not installed");
+        assert!(
+            !detect_installed(&conf_only),
+            "conf without script is not installed"
+        );
     }
 }

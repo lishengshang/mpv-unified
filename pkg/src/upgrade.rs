@@ -71,13 +71,15 @@ struct RemoteMeta {
 /// Read and trim the root `VERSION` file.
 fn read_version(root: &Path) -> Result<String, String> {
     let path = root.join("VERSION");
-    fs::read_to_string(&path).map(|text| text.trim().to_owned()).map_err(|source| {
-        if source.kind() == io::ErrorKind::NotFound {
-            format!("缺少 VERSION 文件 {}:无法确认当前版本", path.display())
-        } else {
-            format!("读取 {} 失败:{source}", path.display())
-        }
-    })
+    fs::read_to_string(&path)
+        .map(|text| text.trim().to_owned())
+        .map_err(|source| {
+            if source.kind() == io::ErrorKind::NotFound {
+                format!("缺少 VERSION 文件 {}:无法确认当前版本", path.display())
+            } else {
+                format!("读取 {} 失败:{source}", path.display())
+            }
+        })
 }
 
 /// Fetch and parse the remote index; every failure is a readable message.
@@ -144,7 +146,9 @@ pub fn check_update(fetcher: &dyn Fetcher, index_url: &str, root: &Path) -> Upda
         current,
         latest: Some(meta.latest.clone()),
         has_update,
-        changelog_url: meta.changelog_url.or_else(|| fallback_changelog_url(index_url)),
+        changelog_url: meta
+            .changelog_url
+            .or_else(|| fallback_changelog_url(index_url)),
         error: None,
     }
 }
@@ -157,7 +161,10 @@ fn find_app_root(extracted: &Path) -> Option<PathBuf> {
     if is_app(extracted) {
         return Some(extracted.to_path_buf());
     }
-    let children: Vec<fs::DirEntry> = fs::read_dir(extracted).ok()?.filter_map(Result::ok).collect();
+    let children: Vec<fs::DirEntry> = fs::read_dir(extracted)
+        .ok()?
+        .filter_map(Result::ok)
+        .collect();
     if children.len() == 1 && children[0].file_type().ok()?.is_dir() {
         let inner = children[0].path();
         if is_app(&inner) {
@@ -199,7 +206,10 @@ fn copy_tree(src: &Path, dst: &Path, top_skip: &[&str], deep_skip: &[&str]) -> i
 fn timestamp_secs() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_or_else(|_| "unknown".to_owned(), |duration| duration.as_secs().to_string())
+        .map_or_else(
+            |_| "unknown".to_owned(),
+            |duration| duration.as_secs().to_string(),
+        )
 }
 
 /// Download, extract, structure-validate, and overlay the new app layer.
@@ -211,7 +221,8 @@ fn apply_new_app(zip_path: &Path, work: &Path, root: &Path) -> Result<usize, Str
     extract(zip_path, &extracted).map_err(|error| format!("升级包解压或校验失败:{error}"))?;
     let app_root = find_app_root(&extracted)
         .ok_or_else(|| "升级包结构无效(缺少 config/ 或 mpv.conf),拒绝替换".to_owned())?;
-    copy_tree(&app_root, root, &[], OVERLAY_EXCLUDE).map_err(|error| format!("替换 app 层失败:{error}"))
+    copy_tree(&app_root, root, &[], OVERLAY_EXCLUDE)
+        .map_err(|error| format!("替换 app 层失败:{error}"))
 }
 
 /// Perform a full upgrade. Never panics; every outcome is a report.
@@ -287,8 +298,11 @@ pub fn perform_upgrade(
                 if restore_ok { "成功" } else { "未能" }
             );
             if !restore_ok {
-                result.message =
-                    format!("{},请手动从 {} 恢复 app 层", result.message, backup.display());
+                result.message = format!(
+                    "{},请手动从 {} 恢复 app 层",
+                    result.message,
+                    backup.display()
+                );
             }
         }
     }

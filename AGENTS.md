@@ -76,6 +76,7 @@
 - 不做全量 400+ 选项表单(精选 ~50-100 项,长尾走 docs/tutorials)
 - 不引入 chezmoi/dotbot 等外部配置工具(借鉴语义,自研引擎)
 - 不 panic、不留 TODO/FIXME
+- git 纪律:只本地 commit,绝不 push(审查后由所有者推送);提交格式 `<type>(<scope>): <summary>`;一个任务一个提交;提交前门禁全绿(test/clippy/fmt/bun build);完整规范见 `docs/git-workflow.md`
 
 ## COMMANDS
 

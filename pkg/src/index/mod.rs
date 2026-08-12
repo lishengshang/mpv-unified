@@ -6,11 +6,19 @@
 //!
 //! ```json
 //! {
+//!   "latest_version": "0.2.0",
+//!   "upgrade_zip_url": "https://github.com/<user>/mpv-config/releases/latest/download/mpv-config.zip",
+//!   "changelog_url": "https://github.com/<user>/mpv-config/releases",
 //!   "packages": [
 //!     { "name": "evafast", "repo": "po5/evafast", "release_tag": "latest", "homepage": "https://..." }
 //!   ]
 //! }
 //! ```
+//!
+//! The three top-level fields are optional app-upgrade metadata (T22):
+//! `latest_version` (version the update check compares against), the zip URL
+//! to download, and a changelog link. A package index without them still
+//! parses; the update check then reports "no update information".
 //!
 //! Every field is validated at the parse boundary (package names, `owner/repo`
 //! shape, release tag, homepage scheme, duplicate names); lookups after that
@@ -39,6 +47,13 @@ pub struct PackageEntry {
 /// A parsed and validated package index.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Index {
+    /// Newest app version announced by the index (`latest_version`); `None`
+    /// when the index carries no update metadata.
+    pub latest_version: Option<String>,
+    /// Direct download URL of the newest app zip (`upgrade_zip_url`).
+    pub upgrade_zip_url: Option<String>,
+    /// Link to the changelog / release page (`changelog_url`).
+    pub changelog_url: Option<String>,
     pub packages: Vec<PackageEntry>,
 }
 
@@ -78,7 +93,12 @@ impl Index {
                 })
             })
             .collect::<Result<Vec<_>, IndexError>>()?;
-        Ok(Self { packages })
+        Ok(Self {
+            latest_version: raw.latest_version,
+            upgrade_zip_url: raw.upgrade_zip_url,
+            changelog_url: raw.changelog_url,
+            packages,
+        })
     }
 
     /// Look up a package entry by exact name.
@@ -115,6 +135,12 @@ impl std::error::Error for IndexError {}
 /// Unvalidated mirror of [`Index`] straight off the JSON document.
 #[derive(Debug, Deserialize)]
 struct RawIndex {
+    #[serde(default)]
+    latest_version: Option<String>,
+    #[serde(default)]
+    upgrade_zip_url: Option<String>,
+    #[serde(default)]
+    changelog_url: Option<String>,
     packages: Vec<RawEntry>,
 }
 

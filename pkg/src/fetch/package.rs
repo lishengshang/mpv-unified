@@ -172,7 +172,7 @@ const TAR_HINT: &str = "install tar (Windows 10+ ships tar.exe)";
 
 /// Extract an archive into `dest`, refusing entries that escape the
 /// directory (zip-slip / tar-slip) before any bytes hit disk.
-fn extract(archive: &Path, dest: &Path) -> Result<(), FetchError> {
+pub(crate) fn extract(archive: &Path, dest: &Path) -> Result<(), FetchError> {
     let name = archive
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());

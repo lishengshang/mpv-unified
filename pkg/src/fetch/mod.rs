@@ -33,6 +33,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::index::Index;
 pub(crate) use error::io_error;
+pub(crate) use package::extract;
 pub use error::FetchError;
 pub use package::{fetch_package, PackageArchive};
 
@@ -212,4 +213,4 @@ pub(crate) fn unique_suffix() -> String {
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod testutil;
+pub(crate) mod testutil;

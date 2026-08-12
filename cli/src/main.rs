@@ -27,6 +27,10 @@ enum Command {
     Doctor(DoctorArgs),
     /// 包管理
     Pkg(PkgArgs),
+    /// 检查更新:对比本地 VERSION 与远程索引的 latest_version
+    CheckUpdate(CheckUpdateArgs),
+    /// 执行升级:下载新版 zip → 备份 app 层 → 替换(保留 user/),失败自动回滚
+    Upgrade(UpgradeArgs),
 }
 
 #[derive(Args, Debug)]
@@ -117,6 +121,24 @@ struct DoctorArgs {
 }
 
 #[derive(Args, Debug)]
+struct CheckUpdateArgs {
+    /// 远程索引 URL(缺省官方索引仓库)
+    #[arg(long, default_value = pkg::fetch::DEFAULT_INDEX_URL)]
+    index_url: String,
+}
+
+#[derive(Args, Debug)]
+struct UpgradeArgs {
+    /// 远程索引 URL(缺省官方索引仓库)
+    #[arg(long, default_value = pkg::fetch::DEFAULT_INDEX_URL)]
+    index_url: String,
+
+    /// 确认执行升级:替换 app 层是破坏性操作,必须显式确认
+    #[arg(long)]
+    yes: bool,
+}
+
+#[derive(Args, Debug)]
 struct GenArgs {
     /// 目标平台:linux | windows | macos(缺省自动检测当前系统)
     #[arg(long, value_enum)]
@@ -155,6 +177,8 @@ fn main() {
         Command::Gen(args) => run_gen(args),
         Command::Doctor(args) => run_doctor(args),
         Command::Pkg(args) => run_pkg(args),
+        Command::CheckUpdate(args) => cli::upgrade_cmds::run_check_update(&args.index_url),
+        Command::Upgrade(args) => cli::upgrade_cmds::run_upgrade(&args.index_url, args.yes),
     };
     std::process::exit(code);
 }

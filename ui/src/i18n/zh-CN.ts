@@ -135,6 +135,25 @@ export const zhCN = {
     aboutVersion: "版本:{version}",
     aboutLicense:
       "配置体系 fork 自 lishengshang/mpv-config、hooke007/mpv-lazy 与 dyphire/mpv-config(MIT 许可 fork 链,见根 LICENSE.MD)。",
+    updateCheck: "检查更新",
+    updateChecking: "检查中…",
+    updateErrorTitle: "检查更新失败",
+    updateNoInfo: "索引未提供版本信息,无法检查更新。",
+    updateUpToDate: "已是最新版本({version})。",
+    updateNewVersion: "发现新版本:{current} → {latest}",
+    updateWarning:
+      "升级会替换 app 层文件并自动备份到缓存;user/ 个人层(个人配置与 API 密钥)不受影响。",
+    updateChangelog: "查看更新日志 ↗",
+    updateRun: "执行升级",
+    updateRunning: "升级中…",
+    updateConfirm: "确认执行升级?",
+    updateConfirmYes: "确认",
+    updateCancel: "取消",
+    updateRegenHint: "升级后请重新生成配置,让新版本的方案与选项生效。",
+    updateRegenerate: "重新生成配置",
+    updateRegenerating: "重新生成中…",
+    updateRegenerated: "配置已重新生成,方案与选项表单已生效",
+    updateRolledBack: "app 层已从备份还原,当前版本未变化,可安全重试。",
   },
 } as const;
 

@@ -6,3 +6,4 @@
 pub mod doctor;
 pub mod gen;
 pub mod pkg_cmds;
+pub mod upgrade_cmds;

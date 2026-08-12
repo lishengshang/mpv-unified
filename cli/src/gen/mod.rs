@@ -71,7 +71,7 @@ pub fn run(options: &GenOptions) -> Result<GenReport, GenError> {
 /// repository root is its parent, one level up. Up to two ancestor levels
 /// are probed for `config/base.conf` (tolerating a deeper nesting), and the
 /// workspace root is the fallback when neither has one.
-pub(crate) fn repo_root() -> PathBuf {
+pub fn repo_root() -> PathBuf {
     let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut ancestors = Vec::new();
     let mut dir = cli_dir.as_path();

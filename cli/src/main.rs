@@ -3,6 +3,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use cli::doctor::{self, CheckResult, DoctorReport};
 use cli::gen::{self, GenOptions};
+use cli::pkg_cmds::lifecycle;
 use cli::pkg_cmds::migrate;
 use core::platform::{self, Platform};
 use std::path::PathBuf;
@@ -38,6 +39,43 @@ struct PkgArgs {
 enum PkgCommand {
     /// 一键迁移现役 manager.json 为 packages/pending/ 待安装记录(T14 安装时消费)
     MigrateManager(MigrateArgs),
+
+    /// 安装包:来源解析(pending git 记录 → 本地 packages/ → 索引)→ 校验 → 拷贝
+    Install(InstallArgs),
+
+    /// 卸载包:按 packages.lock 反查文件清单;共享文件仅当最后使用者才删除
+    Uninstall(UninstallArgs),
+
+    /// 更新包(不指定名称则更新全部已装包):对比最新版本 → 原子替换(备份到缓存)
+    Update(UpdateArgs),
+
+    /// 拉取并校验远程 index.json 到缓存(显式命令,绝不静默更新)
+    UpdateIndex(UpdateIndexArgs),
+}
+
+#[derive(Args, Debug)]
+struct InstallArgs {
+    /// 包名(对应 packages/pending/<name>.yaml、packages/<name>.yaml 或索引中的名称)
+    name: String,
+}
+
+#[derive(Args, Debug)]
+struct UninstallArgs {
+    /// 包名(须在 packages.lock 中)
+    name: String,
+}
+
+#[derive(Args, Debug)]
+struct UpdateArgs {
+    /// 包名(缺省更新全部已装包)
+    name: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct UpdateIndexArgs {
+    /// 远程索引 URL(缺省官方索引仓库)
+    #[arg(long, default_value = pkg::fetch::DEFAULT_INDEX_URL)]
+    index_url: String,
 }
 
 #[derive(Args, Debug)]
@@ -111,6 +149,124 @@ fn main() {
 fn run_pkg(args: PkgArgs) -> i32 {
     match args.command {
         PkgCommand::MigrateManager(args) => run_migrate_manager(args),
+        PkgCommand::Install(args) => run_install(args),
+        PkgCommand::Uninstall(args) => run_uninstall(args),
+        PkgCommand::Update(args) => run_update(args),
+        PkgCommand::UpdateIndex(args) => run_update_index(args),
+    }
+}
+
+fn pkg_roots() -> Result<(PathBuf, PathBuf), lifecycle::LifecycleError> {
+    Ok((gen::repo_root(), lifecycle::default_cache_dir()?))
+}
+
+fn run_install(args: InstallArgs) -> i32 {
+    let (root, cache) = match pkg_roots() {
+        Ok(roots) => roots,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    let options = lifecycle::InstallOptions {
+        name: args.name,
+        repo_root: root,
+        cache_dir: cache,
+        platform: platform::detect(),
+    };
+    match lifecycle::install(&options) {
+        Ok(lifecycle::InstallOutcome::Installed(report)) => {
+            println!("{report}");
+            0
+        }
+        Ok(lifecycle::InstallOutcome::SkippedPlatform {
+            name,
+            package_platform,
+            target,
+        }) => {
+            println!(
+                "跳过安装:包 \"{name}\" 目标平台为 {package_platform},当前平台为 {}",
+                target.display_name()
+            );
+            0
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
+            1
+        }
+    }
+}
+
+fn run_uninstall(args: UninstallArgs) -> i32 {
+    let (root, _) = match pkg_roots() {
+        Ok(roots) => roots,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    let options = lifecycle::UninstallOptions {
+        name: args.name,
+        repo_root: root,
+    };
+    match lifecycle::uninstall(&options) {
+        Ok(report) => {
+            println!("{report}");
+            0
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
+            1
+        }
+    }
+}
+
+fn run_update(args: UpdateArgs) -> i32 {
+    let (root, cache) = match pkg_roots() {
+        Ok(roots) => roots,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    let options = lifecycle::UpdateOptions {
+        name: args.name,
+        repo_root: root,
+        cache_dir: cache,
+    };
+    match lifecycle::update(&options) {
+        Ok(report) => {
+            print!("{report}");
+            0
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
+            1
+        }
+    }
+}
+
+fn run_update_index(args: UpdateIndexArgs) -> i32 {
+    let (_, cache) = match pkg_roots() {
+        Ok(roots) => roots,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    let options = lifecycle::UpdateIndexOptions {
+        index_url: args.index_url,
+        cache_dir: cache,
+    };
+    match lifecycle::update_index(&options) {
+        Ok(path) => {
+            println!("索引已更新并校验通过:{}", path.display());
+            0
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
+            1
+        }
     }
 }
 

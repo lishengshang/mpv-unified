@@ -91,6 +91,26 @@ tools/
 * [dyphire/mpv-config](https://github.com/dyphire/mpv-config) — Windows 原版配置与脚本着色器集
   (本仓库主体内容来源)
 
+### 包管理(`mpv-config pkg`,M2 阶段)
+
+```bash
+mpv-config pkg migrate-manager [manager.json]   # 一键迁移现役源为 packages/pending/ 待安装记录
+mpv-config pkg update-index [--index-url URL]   # 拉取并校验远程 index.json 到缓存(显式命令)
+mpv-config pkg install <name>                   # 安装:packages/pending/ → packages/ → 索引 三源优先序
+mpv-config pkg uninstall <name>                 # 卸载(共享文件仅当最后使用者才删除)
+mpv-config pkg update [name]                    # 更新(缺省全部);原子替换,旧版备份到 ~/.cache/mpv-config/backup/
+```
+
+安装目标为仓库根(`~~/` 展开),绝不触碰 `~/.config/mpv/`。安装结果记录于仓库根 `packages.lock`(T14 最小格式,T16 的 verify/repair 将接管该文件)。
+
+MVP 限制(如实声明):
+- **不自动补装依赖**:依赖缺失时报错并提示 `mpv-config pkg install <dep>`,需手动先装。
+- 依赖为名称级(无版本区间);冲突检测只报不自动解决。
+- pending(git)源无版本号,lock 中记为 `0.0.0` 占位,`update` 时总是重新克隆。
+- whitelist/blacklist 为正则(来自 legacy manager.json 的 Java 风格模式,原样套用 Rust regex);非法正则报错而非静默忽略。
+- 安装中途失败会回滚已拷贝文件与已备份的旧文件;若回滚本身失败,错误信息会指出残留位置。
+- 共享文件 = 多个包 lock 记录同一路径:卸载仅在最后使用者离开时删除;同名文件更新时直接覆盖(旧内容先备份)。
+
 ### 目录结构
 
 ```

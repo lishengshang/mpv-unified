@@ -1,7 +1,9 @@
-//! Shared helpers for the `doctor` integration test binaries.
+//! Shared helpers for the integration test binaries.
 //!
-//! This module is not a test binary itself; the per-check test files import
-//! it with `mod common;`.
+//! This module is not a test binary itself; the per-suite test files import
+//! it with `mod common;`. Every suite links the whole module, so helpers
+//! unused by one suite are dead there by construction.
+#![allow(dead_code)]
 
 use cli::doctor::{self, DoctorReport, Finding};
 use core::platform::Platform;
@@ -94,9 +96,11 @@ pub fn findings_of<'a>(report: &'a DoctorReport, name: &str) -> Vec<&'a Finding>
         .collect()
 }
 
-pub fn finding_messages<'a>(report: &'a DoctorReport, name: &str) -> Vec<String> {
+pub fn finding_messages(report: &DoctorReport, name: &str) -> Vec<String> {
     findings_of(report, name)
         .iter()
         .map(|finding| finding.message.clone())
         .collect()
 }
+
+pub mod lifecycle;

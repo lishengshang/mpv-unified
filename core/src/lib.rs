@@ -8,4 +8,5 @@
 
 pub mod cond;
 pub mod conf;
+pub mod merge;
 pub mod platform;

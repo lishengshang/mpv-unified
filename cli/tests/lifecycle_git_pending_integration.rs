@@ -43,8 +43,10 @@ fn pending_git_install_clones_and_applies_whitelist() {
 
     lifecycle::install(&install_opts(root, &cache, "fromgit")).expect("pending install succeeds");
 
+    // Normalize CRLF (Windows git autocrlf) so the fixture stays byte-stable
+    // on every runner.
     assert_eq!(
-        read_string(&root.join("scripts/foo.lua")),
+        read_string(&root.join("scripts/foo.lua")).replace("\r\n", "\n"),
         "local foo = true\n"
     );
     assert_eq!(
@@ -117,7 +119,10 @@ fn pending_git_update_reclones_and_replaces() {
         ),
     );
     lifecycle::install(&install_opts(root, &cache, "gitpkg")).expect("install succeeds");
-    assert_eq!(read_string(&root.join("scripts/script.lua")), "v1\n");
+    assert_eq!(
+        read_string(&root.join("scripts/script.lua")).replace("\r\n", "\n"),
+        "v1\n"
+    );
 
     git_repo(
         &repo,
@@ -132,6 +137,9 @@ fn pending_git_update_reclones_and_replaces() {
     })
     .expect("git update succeeds");
     assert!(report.items[0].changed, "{report:?}");
-    assert_eq!(read_string(&root.join("scripts/script.lua")), "v2\n");
+    assert_eq!(
+        read_string(&root.join("scripts/script.lua")).replace("\r\n", "\n"),
+        "v2\n"
+    );
     assert!(root.join("scripts/extra.lua").exists());
 }

@@ -88,6 +88,10 @@ pub fn manifest(
 pub fn git_repo(dir: &Path, branch: &str, files: &[(&str, &str)]) {
     fs::create_dir_all(dir).expect("create git fixture dir");
     run_git(dir, &["init", "-q", "-b", branch]);
+    // Keep the fixture repository byte-stable across platforms: Windows git
+    // defaults to core.autocrlf=true and would rewrite LF blobs to CRLF on
+    // clone, breaking assertions that expect LF content.
+    run_git(dir, &["config", "core.autocrlf", "false"]);
     for (path, content) in files {
         write(&dir.join(path), content);
     }

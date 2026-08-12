@@ -1,5 +1,5 @@
-//! `pkg install` / `pkg uninstall` / `pkg update` / `pkg update-index`:
-//! the package lifecycle commands (T14).
+//! `pkg install` / `pkg uninstall` / `pkg update` / `pkg update-index` /
+//! `pkg verify` / `pkg repair`: the package lifecycle commands (T14/T16).
 //!
 //! Install resolves a source in priority order — `packages/pending/<name>.yaml`
 //! (git record expanded by clone + whitelist/blacklist), `packages/<name>.yaml`
@@ -21,10 +21,15 @@ pub mod error;
 pub mod fragment;
 pub mod guard;
 pub mod install;
-pub mod lock;
 pub mod pending;
 pub mod uninstall;
 pub mod update;
+
+/// `packages.lock` schema, atomic read/write, and verify/repair live in the
+/// `pkg` crate (shared with the T20 UI and T22 update-check); re-exported
+/// here so existing `lifecycle::lock` imports keep working.
+pub use pkg::lock;
+pub use pkg::lock::verify::{repair, verify, RepairError, RepairReport, VerifyReport};
 
 use std::fmt;
 use std::path::PathBuf;

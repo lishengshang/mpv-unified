@@ -1,6 +1,7 @@
-//! Minimal `packages.lock` read/write for the T14 lifecycle commands.
+//! `packages.lock` read/write for the package lifecycle (T14 format, T16
+//! ownership).
 //!
-//! Format (T16-aligned contract, see the plan's notes):
+//! Format (T16 contract, see the plan's notes):
 //!
 //! ```yaml
 //! packages:
@@ -13,11 +14,12 @@
 //!
 //! `files` are repository-relative paths (`~~/scripts/x.lua` becomes
 //! `scripts/x.lua`); `config_d` records whether a
-//! `config.d/packages/<name>.conf` fragment was written. T16 takes ownership
-//! of this file (verify/repair); this module only implements compatible
-//! read/write with atomic replacement (tmp + rename).
+//! `config.d/packages/<name>.conf` fragment was written. The file is git
+//! tracked (it is the dependency lock: "package manifest is the lock").
 //!
-//! A missing lock file reads as an empty lock; a *corrupt* file is a typed
+//! [`verify`] and [`repair`] live in [`lock::verify`]; this module owns the
+//! schema plus atomic read/write (tmp + rename, never a torn document). A
+//! missing lock file reads as an empty lock; a *corrupt* file is a typed
 //! [`LockError`] — never a panic.
 
 use std::fmt;
@@ -27,10 +29,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod verify;
+
 /// Header prepended to every written lock file (kept comment-only so the
 /// document still parses as YAML).
 const LOCK_HEADER: &str = "\
-# packages.lock - 由 `mpv-config pkg` 管理(T14 最小格式,T16 verify/repair 接管)。
+# packages.lock - 由 `mpv-config pkg` 管理(T16 verify/repair 可校验一致性)。
 # 本文件进入 git 跟踪;删除其中条目后再 `pkg install` 可重建。
 ";
 
@@ -115,7 +119,7 @@ impl fmt::Display for LockError {
         match self {
             Self::Corrupt { path, message } => write!(
                 f,
-                "{} 解析失败:{message}(T16 将提供 verify/repair;当前可删除后重装,或手动修复)",
+                "{} 解析失败:{message}(请运行 `mpv-config pkg repair` 或删除后重装)",
                 path.display()
             ),
             Self::Io { path, source } => write!(f, "{}: {source}", path.display()),

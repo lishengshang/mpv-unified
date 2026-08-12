@@ -51,6 +51,12 @@ enum PkgCommand {
 
     /// 拉取并校验远程 index.json 到缓存(显式命令,绝不静默更新)
     UpdateIndex(UpdateIndexArgs),
+
+    /// 校验 packages.lock 与实际安装文件的一致性(缺失/多余文件清单)
+    Verify,
+
+    /// 修复 packages.lock 反映的问题:清理 lock 未记录的多余文件(需 --yes)
+    Repair(RepairArgs),
 }
 
 #[derive(Args, Debug)]
@@ -90,6 +96,13 @@ struct MigrateArgs {
     /// 迁移报告输出路径(缺省 docs/migration-report.md)
     #[arg(long, default_value = "docs/migration-report.md")]
     report: PathBuf,
+}
+
+#[derive(Args, Debug)]
+struct RepairArgs {
+    /// 删除 lock 未记录的多余文件(缺省只列出并拒绝执行)
+    #[arg(long)]
+    yes: bool,
 }
 
 #[derive(Args, Debug)]
@@ -153,6 +166,8 @@ fn run_pkg(args: PkgArgs) -> i32 {
         PkgCommand::Uninstall(args) => run_uninstall(args),
         PkgCommand::Update(args) => run_update(args),
         PkgCommand::UpdateIndex(args) => run_update_index(args),
+        PkgCommand::Verify => run_verify(),
+        PkgCommand::Repair(args) => run_repair(args),
     }
 }
 
@@ -285,6 +300,68 @@ fn run_migrate_manager(args: MigrateArgs) -> i32 {
         }
         Err(error) => {
             eprintln!("错误: 迁移失败: {error}");
+            1
+        }
+    }
+}
+
+fn run_verify() -> i32 {
+    let (root, _) = match pkg_roots() {
+        Ok(roots) => roots,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    let lock = match lifecycle::lock::read(&root.join("packages.lock")) {
+        Ok(lock) => lock,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    match lifecycle::verify(&lock, &root) {
+        Ok(report) => {
+            println!("{report}");
+            if report.is_healthy() {
+                0
+            } else {
+                1
+            }
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
+            1
+        }
+    }
+}
+
+fn run_repair(args: RepairArgs) -> i32 {
+    let (root, _) = match pkg_roots() {
+        Ok(roots) => roots,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    let lock = match lifecycle::lock::read(&root.join("packages.lock")) {
+        Ok(lock) => lock,
+        Err(error) => {
+            eprintln!("错误: {error}");
+            return 1;
+        }
+    };
+    match lifecycle::repair(&lock, &root, args.yes) {
+        Ok(report) => {
+            println!("{report}");
+            if report.missing.is_empty() {
+                0
+            } else {
+                1
+            }
+        }
+        Err(error) => {
+            eprintln!("错误: {error}");
             1
         }
     }

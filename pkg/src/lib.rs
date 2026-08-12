@@ -13,6 +13,9 @@
 //!   cycle and missing-dependency detection) and conflict detection
 //!   (`conflicts` exclusivity and dest-path overlap), consumed by the
 //!   installer before it touches the filesystem.
+//! - [`lock`]: the `packages.lock` document — schema, atomic read/write
+//!   (tmp + rename), and the [`lock::verify`]/[`lock::repair`] consistency
+//!   check between the lock and the repository files.
 //!
 //! Every failure is a typed error carrying the offending field or URL;
 //! nothing panics.
@@ -20,4 +23,5 @@
 pub mod deps;
 pub mod fetch;
 pub mod index;
+pub mod lock;
 pub mod manifest;

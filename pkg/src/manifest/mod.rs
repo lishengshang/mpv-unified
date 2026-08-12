@@ -18,8 +18,9 @@ use serde::Deserialize;
 
 /// Top-level directories a `dest` may target (the `~~/` prefix is the repo
 /// root). Subpaths such as `~~/scripts/file-browser` are allowed; the first
-/// component must be one of these.
-const KNOWN_DEST_DIRS: &[&str] = &[
+/// component must be one of these. `pub(crate)` because `lock::verify` scans
+/// exactly these directories for orphan files.
+pub(crate) const KNOWN_DEST_DIRS: &[&str] = &[
     "scripts",
     "shaders",
     "script-opts",

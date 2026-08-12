@@ -244,6 +244,10 @@ fn walk_files(repo_root: &Path, dir: &str, out: &mut Vec<String>) -> Result<(), 
                 path: path.clone(),
                 source: io::Error::other("path escapes repo root"),
             })?
+            .components()
+            .map(|c| c.as_os_str())
+            .collect::<Vec<_>>()
+            .join(std::ffi::OsStr::new("/"))
             .to_string_lossy()
             .into_owned();
         if entry.file_type().map_or(true, |kind| kind.is_dir()) {

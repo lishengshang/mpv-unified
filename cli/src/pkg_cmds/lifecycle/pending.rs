@@ -225,9 +225,12 @@ fn collect_files(root: &Path) -> std::io::Result<Vec<String>> {
                 continue;
             }
             let rel_str = rel
-                .to_str()
-                .map(str::to_owned)
-                .ok_or_else(|| std::io::Error::other("非 UTF-8 文件名,跳过"))?;
+                .components()
+                .map(|c| c.as_os_str())
+                .collect::<Vec<_>>()
+                .join(std::ffi::OsStr::new("/"))
+                .into_string()
+                .map_err(|_| std::io::Error::other("非 UTF-8 文件名,跳过"))?;
             if entry.file_type()?.is_dir() {
                 walk(&path, root, out)?;
             } else if entry.file_type()?.is_file() {

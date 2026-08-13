@@ -142,14 +142,14 @@ fi
 #         tNjXZUnOJWcHznHDyalNMYqqP6IdDdpQ  → AssrtOSS/mpv-assrt 公共 OSS token(脚本默认)
 #         NmJmYjIxOTZkNzIyN2UyMTIzMGM3Y2YzZjQ4MDNkZGM= → uosc_danmaku 模板占位(base64)
 echo "-- 密钥扫描 --"
-SECRET_HITS="$(grep -rnE \
+SECRET_HITS="$(grep -rnIE \
     -e '(sk-[A-Za-z0-9_-]{20,})' \
     -e '(AIza[0-9A-Za-z_-]{30,})' \
     -e '(gh[pousr]_[A-Za-z0-9]{30,})' \
     -e '(AKIA[0-9A-Z]{16})' \
     -e 'BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY' \
     "$STAGE" 2>/dev/null || true)"
-ASSIGN_HITS="$(grep -rnE \
+ASSIGN_HITS="$(grep -rnIE \
     -e '^[[:space:]]*(api_token|tmdb_api_key|api_key|apikey|token)[[:space:]]*=[^[:space:]#].{16,}' \
     --include='*.conf' --include='*.lua' --include='*.js' --include='*.json' \
     --include='*.yaml' --include='*.yml' --include='*.toml' --include='*.txt' \

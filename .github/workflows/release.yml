@@ -49,7 +49,9 @@ jobs:
 
       # GUI 二进制可选(zip 分发以 CLI + 配置为主)。tauri 依赖链较重,
       # 若编译超时可注释本步 —— build-dist.sh 对缺失 GUI 二进制仅警告,不失败。
+      # shell 必须是 bash: Windows runner 默认 pwsh 下 `||` 不生效(以原生命令退出码退出)。
       - name: Build GUI binary (optional)
+        shell: bash
         working-directory: ui/src-tauri
         run: cargo build --release || echo "::warning::GUI 二进制可选,编译失败不阻塞发布(CLI 二进制已就绪)"
 

@@ -1,23 +1,25 @@
-## MPV config ([English branch](https://github.com/dyphire/mpv-config/tree/eng))
+## MPV config
 
 ### 项目介绍
 
-本项目为 windows 下 [mpv](https://github.com/mpv-player/mpv) 播放器的配置文件，应放入`mpv.exe`所在目录的`portable_config`文件夹内，
+本项目为跨平台 [mpv](https://github.com/mpv-player/mpv) 统一配置包 + 管理工具:一份配置源
+(`config/` base + 平台分层 + 条件指令)经生成器编译为各平台 `mpv.conf`;提供 CLI
+(`mpv-config`)与 Tauri GUI,支持方案切换、包管理与升级。生成内容放入 mpv 配置目录即可生效:
 
-或 mpv 配置默认路径`%APPDATA%/mpv/`下，这种方式全局生效。
+- **Windows**: `mpv.exe` 所在目录的 `portable_config/`(便携模式,覆盖全局),或
+  `%APPDATA%/mpv/`(全局生效)
+- **Linux / macOS**: `~/.config/mpv/`(或 `$XDG_CONFIG_HOME/mpv`)
 
-使用`portable_config`时会覆盖全局配置方案。
+PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为 Unix，否则 MPV 可能无法识别。
 
-PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为 Unix，否则 MPV 可能无法识别
-
-**mpv 整合包下载**：[Releases](https://github.com/dyphire/mpv-config/releases)
+**mpv 整合包下载**：[Releases](https://github.com/lishengshang/mpv-unified/releases)
 
 ### 快速开始(三平台)
 
 > **最低支持 mpv 版本:0.36**(决策 D12⑤:各平台跟随较新稳定版;`apply-profile`
 > 命令与 uosc 5.x 均要求 ≥ 0.36,建议直接使用最新稳定版)。
 
-1. **下载**:到 [Releases](https://github.com/dyphire/mpv-config/releases) 下载
+1. **下载**:到 [Releases](https://github.com/lishengshang/mpv-unified/releases) 下载
    对应平台的 zip(`mpv-config-<linux|windows|macos>-<version>.zip`)。
 2. **解压**:解压后得到 `mpv-config/` 目录(app 层配置 + 生成器;`user/`
    由首次运行自动创建,升级时原样保留)。
@@ -83,7 +85,7 @@ tools/
 
 ### 脚本着色器说明
 
-本项目使用的 mpv 脚本及功能介绍详见 wiki 内容： [脚本说明-wiki](https://github.com/dyphire/mpv-config/wiki/脚本说明)
+本项目使用的 mpv 脚本集源自上游 [dyphire/mpv-config](https://github.com/dyphire/mpv-config),其功能说明见上游 wiki: [脚本说明-wiki](https://github.com/dyphire/mpv-config/wiki/脚本说明)
 
 本项目涉及的着色器见 mpv.conf 中相关内容
 

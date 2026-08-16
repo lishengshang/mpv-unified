@@ -2,13 +2,15 @@
 
 ### 项目介绍
 
-本项目为跨平台 [mpv](https://github.com/mpv-player/mpv) 统一配置包 + 管理工具:一份配置源
-(`config/` base + 平台分层 + 条件指令)经生成器编译为各平台 `mpv.conf`;提供 CLI
-(`mpv-config`)与 Tauri GUI,支持方案切换、包管理与升级。生成内容放入 mpv 配置目录即可生效:
+本项目为跨平台 [mpv](https://github.com/mpv-player/mpv) 统一配置包 + 管理工具:
+一份配置源(`config/` base + 平台分层 + 条件指令)经生成器编译为各平台
+`mpv.conf`;提供 CLI(`mpv-config`)与 Tauri GUI,支持方案切换、包管理与升级。
+**Windows 发行包直接捆绑 mpv 播放器本体:下载解压、双击 `mpv.exe` 即用**,
+配置/插件/着色器随版本一键整体更新;配置放置方式:
 
-- **Windows**: `mpv.exe` 所在目录的 `portable_config/`(便携模式,覆盖全局),或
-  `%APPDATA%/mpv/`(全局生效)
-- **Linux / macOS**: `~/.config/mpv/`(或 `$XDG_CONFIG_HOME/mpv`)
+- **Windows**:解压目录即播放器目录(自带 `portable_config/`,mpv 便携模式自动识别,
+  覆盖全局);或把 `portable_config/` 内放入 `%APPDATA%/mpv/`(全局生效)
+- **Linux / macOS**:放入 `~/.config/mpv/`(或 `$XDG_CONFIG_HOME/mpv`)
 
 PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为 Unix，否则 MPV 可能无法识别。
 
@@ -21,20 +23,26 @@ PS：自行编辑配置文件时，注意编码格式应为 UTF-8，换行符为
 
 1. **下载**:到 [Releases](https://github.com/lishengshang/mpv-unified/releases) 下载
    对应平台的 zip(`mpv-config-<linux|windows|macos>-<version>.zip`)。
-2. **解压**:解压后得到 `mpv-config/` 目录(app 层配置 + 生成器;`user/`
-   由首次运行自动创建,升级时原样保留)。
-3. **放置**(两种方式任选):
-   - **Windows**:把 `portable_config` 目录放入 `mpv.exe` 所在目录(推荐,
-     覆盖全局配置);或把生成内容放入 `%APPDATA%/mpv/`(全局生效)。
-   - **Linux / macOS**:放入 `~/.config/mpv/`(或 `$XDG_CONFIG_HOME/mpv`)。
-4. **使用**:运行 `mpv-config gen`(或使用图形界面"方案/配置/应用并生成"),
-   把生成的 `dist/` 内容放入 mpv 配置目录即可;播放中右键 uosc 菜单
-   「方案」子菜单可随时切换方案(见 [uosc 联动](docs/uosc-integration.md))。
+2. **解压即用**:
+   - **Windows**:zip 已捆绑 mpv 本体(shinchiro 稳定版,出处见包内
+     `MPV-BUILD.txt`)。解压得到 `mpv-config/` 目录,**双击 `mpv.exe` 即可播放**;
+     整个目录自包含,可整体移动。三步上手说明见包内 `QUICKSTART.md`。
+   - **Linux / macOS**:zip 不含 mpv 本体,先用系统包管理器安装 mpv,再把
+     `portable_config/` 内全部内容放入 `~/.config/mpv/`(目录不存在则新建)。
+3. **切方案**:播放中右键 uosc 菜单,「方案」子菜单随时切换
+   (高清观影/弹幕直播/低延迟游戏等,见 [uosc 联动](docs/uosc-integration.md))。
+4. **个性化与更新**(可选):
+   - 个人配置写入 `user/user.conf`(模板 `user/user.example.conf`,升级永不覆盖),
+     改完在解压目录内运行 `mpv-config gen` 重新生成 `portable_config/`
+     (缺省输出目录即 `portable_config/`);或用图形界面表单调整后「应用并生成」。
+   - 一键更新:`mpv-config check-update` 检查新版本;`mpv-config upgrade --yes`
+     整体更新配置+插件+着色器+mpv 本体(user 层保留,升级后自动重新生成配置)。
 
 > **GUI 二进制可选**:zip 内始终包含 CLI 二进制 `mpv-config`(`.exe`),GUI
 > 图形界面 `mpv-config-gui`(`.exe`)为可选附带(以 zip 分发为主,
 > `ui/src-tauri/tauri.conf.json` 的 `bundle.active` 保持 `false`,不产安装包)。
-> 两者同名产物不冲突:`gen`/`doctor`/`pkg` 走 CLI,图形界面仅作可视化入口。
+> 两者同名产物不冲突:`gen`/`doctor`/`pkg` 走 CLI,图形界面仅作可视化入口;
+> 在解压出的目录内均可直接运行。
 
 > 自行编辑配置文件时,注意编码格式应为 UTF-8,换行符为 Unix,否则 MPV
 > 可能无法识别。macOS 平台层标记 experimental,暂未真机验证。
@@ -64,7 +72,8 @@ tools/
 ```
 
 - **层顺序**:`base` → `{platform}` → `package` → `user`,后层覆盖前层同名选项。
-- **生成**:`mpv-config gen --platform <linux|windows|macos>` 输出最终 `mpv.conf`(待 T6 落地)。
+- **生成**:`mpv-config gen --platform <linux|windows|macos>` 输出最终 `mpv.conf`
+  (缺省输出 `./portable_config/`,Windows 下即 mpv 便携配置目录)。
 - **验证**:`tools/verify-equivalence.sh linux`(对照现役 `~/.config/mpv/mpv.conf`)
   或 `tools/verify-equivalence.sh windows`(对照 `archive/mpv.conf.orig`)。
 - **等价分析**:Windows 原版 vs Linux 移植版的逐条差异清单见 `docs/platform-diff.md`(待用户确认)。
@@ -117,6 +126,8 @@ tools/
   (k7sfunc 补帧/超分方案、`vs-plugins/models` 模型约定)
 * [dyphire/mpv-config](https://github.com/dyphire/mpv-config) — Windows 原版配置与脚本着色器集
   (本仓库主体内容来源)
+* [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake) —
+  Windows 发行包捆绑的 mpv 播放器本体(mpv 以 GPLv2+ 许可发布)
 
 ### 包管理(`mpv-config pkg`,M2 阶段)
 
@@ -141,9 +152,10 @@ MVP 限制(如实声明):
 ### 目录结构
 
 ```
-config/             # 配置源: base + 平台层 + input 层 (T6 生成最终 mpv.conf)
+config/             # 配置源: base + 平台层 + input 层 (gen 生成最终 mpv.conf)
 cli/ core/ pkg/ tools/   # mpv-config-manager 本体 (Rust + CLI)
 user/               # user 层模板 (user.example.conf, 实体已 gitignore)
+portable_config/    # gen 默认输出 (gitignored; zip 内为预生成成品)
 scripts/            # mpv 脚本 (lua/子目录) + display-info.dll (Windows)
 script-opts/        # 脚本配置 (API key 类为注释模板形态, 实体不入库)
 shaders/            # 着色器 (Ani4k/Anime4K/AnimeJaNai/igv/nnedi3/other/ravu)
@@ -152,8 +164,11 @@ icc/                # 色彩管理 ICC 配置
 vs/                 # VapourSynth 滤镜脚本 (依赖外部 k7sfunc + models, 见 docs/platform-assets.md)
 osc-style/ script-modules/ archive/   # 备用 OSC 样式 / 脚本模块 / 原版备份
 CATEGORIES.md       # 脚本分类参考 (包商店 11 类, 决策 D8)
-docs/               # 平台差异 / 平台特有资产 / 等价验证白名单
+docs/               # 平台差异 / 平台特有资产 / 等价验证白名单 / quickstart(随包说明)
 ```
+
+Windows 发行包额外携带: `mpv.exe`/`mpv.com`/`d3dcompiler_43.dll`(mpv 本体)、
+`MPV-BUILD.txt`(本体出处)、`QUICKSTART.md`(一页式上手)、`docs/tutorials/`(GUI 帮助页数据)。
 
 平台特有文件取舍详见 [`docs/platform-assets.md`](docs/platform-assets.md)。
 

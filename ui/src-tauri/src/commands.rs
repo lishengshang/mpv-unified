@@ -121,17 +121,13 @@ pub fn set_profile_state(enabled_ids: Vec<String>) -> Result<(), String> {
         .map_err(|error| format!("保存方案状态失败:{error}"))
 }
 
-/// Regenerate `dist/mpv.conf` (+ `input.conf`) with the current profile
-/// state, reusing the cli `gen` engine.
+/// Regenerate `portable_config/mpv.conf` (+ `input.conf`) with the current
+/// profile state, reusing the cli `gen` engine.
 #[tauri::command]
 pub fn regenerate() -> Result<RegenSummary, String> {
     let root = cli::gen::repo_root();
-    let options = cli::gen::GenOptions {
-        platform: None,
-        out: root.join("dist"),
-        dry_run: false,
-    };
-    let report = cli::gen::run(&options).map_err(|error| format!("生成失败:{error}"))?;
+    let report =
+        cli::gen::regenerate_portable_config(&root).map_err(|error| format!("生成失败:{error}"))?;
     Ok(RegenSummary {
         files: report
             .files
@@ -215,16 +211,26 @@ pub fn check_update() -> Result<pkg::upgrade::UpdateInfo, String> {
 }
 
 /// Execute the guided upgrade (T22): download → backup app layer → overlay
-/// (user layer preserved) with automatic rollback on failure. Confirmation
-/// is the frontend's job (explicit dialog before invoking this command).
+/// (user layer preserved) with automatic rollback on failure, then
+/// regenerate `portable_config/` to re-merge the user layer (the shipped
+/// one is pre-generated without it). Confirmation is the frontend's job
+/// (explicit dialog before invoking this command).
 #[tauri::command]
 pub fn perform_upgrade() -> Result<pkg::upgrade::UpgradeResult, String> {
     let root = cli::gen::repo_root();
     let cache = pkg::fetch::cache_dir().map_err(|error| format!("无法定位缓存目录:{error}"))?;
-    Ok(pkg::upgrade::perform_upgrade(
+    let result = pkg::upgrade::perform_upgrade(
         &pkg::fetch::HttpFetcher,
         pkg::fetch::DEFAULT_INDEX_URL,
         &cache,
         &root,
-    ))
+    );
+    if result.applied_version.is_some() {
+        if let Err(error) = cli::gen::regenerate_portable_config(&root) {
+            return Err(format!(
+                "升级已完成,但重新生成配置失败:{error};请手动运行 `mpv-config gen`"
+            ));
+        }
+    }
+    Ok(result)
 }

@@ -32,9 +32,11 @@ pub enum GenError {
 impl fmt::Display for GenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingLayer { path } => {
-                write!(f, "缺少必需层文件 {}:该文件必须存在", path.display())
-            }
+            Self::MissingLayer { path } => write!(
+                f,
+                "缺少必需层文件 {}:请在本工具所在目录(解压后的 mpv-config 目录)内运行,且该文件必须存在",
+                path.display()
+            ),
             Self::Io {
                 action,
                 path,

@@ -3,9 +3,42 @@
 //! [`MockFetcher`] with hermetic zip/tar.gz fixtures.
 
 use super::*;
-use crate::fetch::package::{fetch_package, PackageArchive};
+use crate::fetch::package::{fetch_package, PackageArchive, ZipTool};
 
 use testutil::{manifest_yaml, tar_gz_bytes, zip_bytes};
+
+#[test]
+fn zip_tool_variants_shape_their_subprocess_arguments() {
+    // Info-ZIP unzip (Unix): `-Z1` lists, `-o -q <archive> -d <dest>`.
+    let unzip = ZipTool::Unzip;
+    assert_eq!(unzip.command(), "unzip");
+    assert_eq!(unzip.list_args("a.zip"), vec!["-Z1", "a.zip"]);
+    assert_eq!(
+        unzip.extract_args("a.zip", "out"),
+        vec!["-o", "-q", "a.zip", "-d", "out"]
+    );
+
+    // bsdtar (Windows, no unzip available): `-tf` lists, zip auto-detected.
+    let tar = ZipTool::Tar;
+    assert_eq!(tar.command(), "tar");
+    assert_eq!(tar.list_args("a.zip"), vec!["-tf", "a.zip"]);
+    assert_eq!(
+        tar.extract_args("a.zip", "out"),
+        vec!["-xf", "a.zip", "-C", "out"]
+    );
+}
+
+#[test]
+fn zip_tool_selects_tar_only_on_windows() {
+    assert_eq!(
+        ZipTool::select(),
+        if cfg!(windows) {
+            ZipTool::Tar
+        } else {
+            ZipTool::Unzip
+        }
+    );
+}
 #[test]
 fn fetch_package_happy_path_zip() {
     let entry = entry("evafast", "po5/evafast", "latest");

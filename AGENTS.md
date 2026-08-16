@@ -6,7 +6,7 @@
 
 ## OVERVIEW
 
-跨平台即用 mpv 统一配置包 + 管理工具:一份配置源(base + platform 分层 + 条件指令)经生成器编译为各平台 mpv.conf;package.yaml 包管理器;Tauri GUI(方案卡片/表单/包商店/帮助)。Linux 为开发主线,macOS experimental。现役用户目录 `~/.config/mpv/` 是**只读参考**,任何代码/脚本不得写入。
+跨平台即用 mpv 统一配置包 + 管理工具:一份配置源(base + platform 分层 + 条件指令)经生成器编译为各平台 mpv.conf;package.yaml 包管理器;Tauri GUI(方案卡片/表单/包商店/帮助)。**产品定位(2026-08-16 所有者确认)**:"下载一个包 = 调好的 mpv 播放器(Windows zip 捆绑 shinchiro 稳定版本体,解压双击即用),配置+插件+本体随版本整体一键更新,user 层永不丢失";单插件粒度/真索引为二期。Linux 为开发主线,macOS experimental。现役用户目录 `~/.config/mpv/` 是**只读参考**,任何代码/脚本不得写入。
 
 ## STRUCTURE
 
@@ -17,8 +17,9 @@
 ├── ui/         # Tauri 2 + Vue3 + TS(src-tauri = Rust 壳 + commands;src/ = 四页前端)
 ├── config/     # 分层配置源(产品核心资产,中文注释):base.conf/linux.conf/windows.conf/input.conf 变体/profiles.yaml/options-gui.yaml
 ├── user/       # 个人层(gitignore):user.conf/gui.conf/profiles-state.json,由工具生成
+├── portable_config/  # gen 默认输出(gitignored);zip 内为预生成成品,mpv 便携模式目录
 ├── packages/   # 本地包 manifest(pending/ = manager.json 迁移产物)
-├── docs/       # 架构文档 + tutorials/(36 篇中文教程)
+├── docs/       # 架构文档 + tutorials/(36 篇中文教程)+ quickstart.md(随包说明→zip 内 QUICKSTART.md)
 ├── tools/      # verify-equivalence.sh(等价验证)/build-dist.sh(zip 打包)/check-tutorials.sh
 ├── scripts/ shaders/ fonts/ script-opts/ vs/ icc/ osc-style/  # mpv 资产(内容)
 └── .github/workflows/  # ci.yml(三平台测试)+ release.yml(tag 触发三平台 zip)
@@ -95,6 +96,9 @@ cd ui && bun run tauri dev                      # GUI 开发
 
 ## NOTES (关键设计决策)
 
+- **产品定位(2026-08-16)**:开箱即用整合播放器——Windows zip 捆绑 mpv 本体(build-dist 下载 shinchiro x86_64 最新版,仅取 mpv.exe/mpv.com/d3dcompiler_43.dll + MPV-BUILD.txt),gen 输出进 `portable_config/`(mpv 便携模式);更新粒度 = app 层整体(升级后 CLI/GUI 自动 `regenerate_portable_config` 重新合并 user 层);单插件/索引仓库后置
+- **repo_root 运行时定位**:exe 目录祖先 → cwd 祖先 → 编译期 `CARGO_MANIFEST_DIR` 兜底(release 二进制在任意用户目录可用;2026-08-16 修复 v0.1.0 烧死 CI 路径的问题)
+- **Windows zip 解压**:用系统自带 bsdtar(`tar -tf/-xf`,ZipTool),Unix 维持 unzip;zip-slip 预扫不变
 - **1C 混合配置模型**:成块平台差异拆文件(base+platform),零星差异用 `#@if platform==windows` 指令
 - **四层叠加**:base → platform → packages → user;同名键后层原位覆盖,注释永不丢
 - **升级机制**:app 层(可替换)+ user 层(保留);`perform_upgrade` 下载→备份→替换→回滚,user 层 md5 不变是硬断言

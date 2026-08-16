@@ -148,6 +148,13 @@ fn update_index_refuses_invalid_index_and_writes_nothing() {
     );
 }
 
+#[test]
+fn ensure_index_url_rejects_placeholder_before_any_network_use() {
+    let err = ensure_index_url(DEFAULT_INDEX_URL).expect_err("placeholder must fail");
+    assert!(matches!(err, FetchError::IndexUnconfigured), "{err:?}");
+    assert!(ensure_index_url("https://example.com/index.json").is_ok());
+}
+
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]

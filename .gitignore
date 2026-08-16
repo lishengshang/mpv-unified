@@ -15,5 +15,6 @@ scripts/webtorrent.js
 user/*
 !user/user.example.conf
 *.local.conf
+portable_config/
 
 .pkg-backup-*

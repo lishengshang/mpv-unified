@@ -84,29 +84,72 @@ pub fn run(options: &GenOptions) -> Result<GenReport, GenError> {
     run_at_root(&repo_root(), options)
 }
 
-/// Resolve the repository root holding `config/`, `config.d/` and `user/`.
+/// Regenerate `portable_config/` under `root` for the host platform.
 ///
-/// `CARGO_MANIFEST_DIR` points at the `cli` crate (`<repo>/cli`); the
-/// repository root is its parent, one level up. Up to two ancestor levels
-/// are probed for `config/base.conf` (tolerating a deeper nesting), and the
-/// workspace root is the fallback when neither has one.
+/// Runs after an app-layer upgrade (CLI `upgrade` and the GUI): the shipped
+/// `portable_config/` is pre-generated without the user layer, so it must be
+/// re-merged with the preserved `user/` files to become active.
+pub fn regenerate_portable_config(root: &Path) -> Result<GenReport, GenError> {
+    run_at_root(
+        root,
+        &GenOptions {
+            platform: None,
+            out: root.join("portable_config"),
+            dry_run: false,
+        },
+    )
+}
+
+/// Resolve the application root holding `config/`, `user/` and the assets.
+///
+/// Runtime locations are probed first — the directory of the running
+/// executable, then the working directory, each with its ancestors — so a
+/// released binary finds the `config/` tree shipped next to it in the dist
+/// zip (and `cargo run` / `tauri dev` resolve the checkout root through
+/// `target/`). `CARGO_MANIFEST_DIR` is a compile-time path baked in on the
+/// build machine and never exists on an end user's system; it stays as the
+/// last dev-only fallback. When nothing matches, the executable directory is
+/// returned so follow-up errors reference the user's actual location.
 pub fn repo_root() -> PathBuf {
-    let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut ancestors = Vec::new();
-    let mut dir = cli_dir.as_path();
-    while let Some(parent) = dir.parent() {
-        ancestors.push(parent);
-        dir = parent;
-        if ancestors.len() == 2 {
-            break;
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.to_path_buf());
         }
     }
-    ancestors
-        .into_iter()
-        .find(|dir| dir.join("config").join("base.conf").is_file())
-        .or_else(|| cli_dir.parent())
-        .unwrap_or(cli_dir.as_path())
-        .to_path_buf()
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd);
+    }
+    for start in &candidates {
+        if let Some(root) = find_config_root(start) {
+            return root;
+        }
+    }
+    let cli_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if let Some(root) = find_config_root(&cli_dir) {
+        return root;
+    }
+    candidates.into_iter().next().unwrap_or(cli_dir)
+}
+
+/// Maximum ancestor levels probed above a starting directory when locating
+/// `config/base.conf`. Four levels cover the deepest shipped layout
+/// (`ui/src-tauri/target/debug/` → repository root).
+const CONFIG_PROBE_DEPTH: usize = 4;
+
+/// Find the nearest ancestor of `start` (including `start` itself) that
+/// carries the `config/base.conf` marker, up to [`CONFIG_PROBE_DEPTH`]
+/// levels above `start`; `None` when no level within the depth matches.
+pub(crate) fn find_config_root(start: &Path) -> Option<PathBuf> {
+    let mut dir = Some(start);
+    for _ in 0..=CONFIG_PROBE_DEPTH {
+        let current = dir?;
+        if current.join("config").join("base.conf").is_file() {
+            return Some(current.to_path_buf());
+        }
+        dir = current.parent();
+    }
+    None
 }
 
 /// Run `gen` with an explicit repository root (used by tests with fixture
@@ -190,7 +233,7 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     // uosc 补丁在其上追加,保持 T23 语义(生成的 uosc.conf 含方案菜单补丁)。
     let asset_dirs = assets::copy_assets(root, options)?;
     // uosc 菜单补丁(任务 23):启用方案 ≥1 时,若检测到 uosc,生成
-    // dist/script-opts/uosc.conf 补丁并把菜单项追加到 input.conf。
+    // portable_config/script-opts/uosc.conf 补丁并把菜单项追加到 input.conf。
     let mut uosc_menu_lines: Option<String> = None;
     if let Some((profiles, enabled_ids)) = profile_blocks(root, &mut warnings)? {
         if !enabled_ids.is_empty() {
@@ -332,7 +375,7 @@ fn profile_blocks(
 }
 
 /// Emit the uosc menu patch when uosc is installed: writes
-/// `dist/script-opts/uosc.conf` (the repository's own `uosc.conf`, when
+/// `portable_config/script-opts/uosc.conf` (the repository's own `uosc.conf`, when
 /// present, with the patch appended — never clobbered) and returns the
 /// operative menu lines for `input.conf`. When uosc is absent, warns and
 /// returns `None` — the integration degrades gracefully, never errors.
@@ -406,4 +449,101 @@ fn write_output(
         copied: false,
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    /// Minimal temp-dir helper; the workspace keeps std-only dependencies,
+    /// mirroring the `TestDir` pattern of `tests/common`.
+    struct ScratchDir(PathBuf);
+
+    impl ScratchDir {
+        fn new(tag: &str) -> Self {
+            static SEQ: AtomicU64 = AtomicU64::new(0);
+            let unique = format!(
+                "mpv-config-gen-test-{}-{}-{}",
+                tag,
+                std::process::id(),
+                SEQ.fetch_add(1, Ordering::Relaxed)
+            );
+            let path = std::env::temp_dir().join(unique);
+            fs::create_dir_all(&path).expect("创建测试临时目录");
+            Self(path)
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Lay down the `config/base.conf` marker so `start` resolves as a root.
+    fn make_config_source(root: &Path) {
+        fs::create_dir_all(root.join("config")).expect("创建 config 目录");
+        fs::write(root.join("config").join("base.conf"), "# base\n").expect("写入 base.conf");
+    }
+
+    #[test]
+    fn find_config_root_accepts_start_itself() {
+        let scratch = ScratchDir::new("in-place");
+        make_config_source(scratch.0.as_path());
+        assert_eq!(
+            find_config_root(scratch.0.as_path()),
+            Some(scratch.0.clone())
+        );
+    }
+
+    #[test]
+    fn find_config_root_locates_marker_from_nested_descendant() {
+        // The dist-zip layout: the binary sits several levels below the
+        // application root (e.g. ui/src-tauri/target/debug in dev).
+        let scratch = ScratchDir::new("nested");
+        let root = scratch.0.join("repo");
+        make_config_source(&root);
+        let start = root.join("a").join("b").join("c");
+        fs::create_dir_all(&start).expect("创建嵌套目录");
+        assert_eq!(find_config_root(&start), Some(root));
+    }
+
+    #[test]
+    fn find_config_root_beyond_depth_returns_none() {
+        // Five levels above the start is beyond CONFIG_PROBE_DEPTH.
+        let scratch = ScratchDir::new("too-deep");
+        let root = scratch.0.join("repo");
+        make_config_source(&root);
+        let mut start = root.clone();
+        for name in ["a", "b", "c", "d", "e"] {
+            start = start.join(name);
+        }
+        fs::create_dir_all(&start).expect("创建深层目录");
+        assert_eq!(find_config_root(&start), None);
+    }
+
+    #[test]
+    fn find_config_root_without_marker_returns_none() {
+        let scratch = ScratchDir::new("no-marker");
+        assert_eq!(find_config_root(scratch.0.as_path()), None);
+    }
+
+    #[test]
+    fn regenerate_portable_config_writes_into_root_portable_config() {
+        let scratch = ScratchDir::new("regen");
+        make_config_source(scratch.0.as_path());
+        for layer in ["windows.conf", "linux.conf", "macos.conf"] {
+            fs::write(scratch.0.join("config").join(layer), "# layer\n").expect("写入平台层");
+        }
+        let report = regenerate_portable_config(scratch.0.as_path()).expect("regenerate");
+        assert!(scratch.0.join("portable_config").join("mpv.conf").is_file());
+        assert!(
+            report
+                .files
+                .iter()
+                .any(|file| file.path.ends_with("mpv.conf")),
+            "{report:?}"
+        );
+    }
 }

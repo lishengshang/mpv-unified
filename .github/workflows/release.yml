@@ -58,19 +58,34 @@ jobs:
       - name: Assemble dist zip
         run: bash tools/build-dist.sh "${{ matrix.platform }}" dist
 
-      # CI 冒烟:解压 → 结构断言(脚本内已做)→ 有 mpv 则跑 1 帧
-      - name: Smoke test (unzip + mpv if available)
+      # CI 冒烟(Linux):解压 → 模拟最终用户运行 CLI → 有 mpv 则跑 1 帧
+      - name: Smoke test (linux)
         if: runner.os == 'Linux'
         run: |
           unzip -q dist/mpv-config-${{ matrix.platform }}-*.zip -d dist-check
           echo "zip 顶层内容:"; ls dist-check
           echo "app 层内容:"; ls dist-check/mpv-config | head -20
+          # 模拟最终用户:在解压出的目录内运行(验证 exe 相邻定位,而非源码仓库路径)
+          (cd dist-check/mpv-config && ./mpv-config gen --dry-run)
           if command -v mpv >/dev/null 2>&1; then
-            mpv --config-dir="$PWD/dist-check/mpv-config" --no-video --frames=1 --no-terminal av://lavfi:testsrc2=size=64x64:rate=1:duration=1 \
+            mpv --config-dir="$PWD/dist-check/mpv-config/portable_config" --no-video --frames=1 --no-terminal av://lavfi:testsrc2=size=64x64:rate=1:duration=1 \
               || echo "::warning::mpv 冒烟失败,见上方日志(如缺字体/脚本依赖请记录)"
           else
             echo "runner 无 mpv,跳过播放冒烟"
           fi
+
+      # CI 冒烟(Windows):解压含 mpv 本体的整合包 → 用户视角运行 CLI 与播放器
+      - name: Smoke test (windows bundle)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          7z x -y dist/mpv-config-windows-*.zip -odist-check > /dev/null
+          cd dist-check/mpv-config
+          ls -la | head -20
+          ./mpv-config.exe gen --dry-run
+          ./mpv-config.exe doctor || [ $? -le 2 ]
+          ./mpv.com --version | head -2
+          ./mpv.exe --version | head -2
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2

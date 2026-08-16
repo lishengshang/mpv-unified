@@ -144,8 +144,8 @@ struct GenArgs {
     #[arg(long, value_enum)]
     platform: Option<PlatformArg>,
 
-    /// 输出目录,自动创建(缺省 ./dist)
-    #[arg(long, default_value = "dist")]
+    /// 输出目录,自动创建(缺省 ./portable_config,mpv 便携模式直接识别)
+    #[arg(long, default_value = "portable_config")]
     out: PathBuf,
 
     /// 只打印将生成的文件清单与行数,不写盘
@@ -286,6 +286,10 @@ fn run_update(args: UpdateArgs) -> i32 {
 }
 
 fn run_update_index(args: UpdateIndexArgs) -> i32 {
+    if let Err(error) = pkg::fetch::ensure_index_url(&args.index_url) {
+        eprintln!("错误: {error}");
+        return 1;
+    }
     let (_, cache) = match pkg_roots() {
         Ok(roots) => roots,
         Err(error) => {
@@ -524,7 +528,7 @@ mod tests {
         };
         assert_eq!(args.platform, Some(PlatformArg::Windows));
         assert!(args.dry_run);
-        assert_eq!(args.out, PathBuf::from("dist"));
+        assert_eq!(args.out, PathBuf::from("portable_config"));
     }
 
     #[test]

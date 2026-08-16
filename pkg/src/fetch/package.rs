@@ -167,8 +167,60 @@ fn pick_asset(release: &serde_json::Value, entry: &PackageEntry) -> Result<Asset
         })
 }
 
-const UNZIP_HINT: &str = "install unzip (Linux: `apt install unzip`, macOS: `brew install unzip`; Windows: use Git Bash)";
-const TAR_HINT: &str = "install tar (Windows 10+ ships tar.exe)";
+const UNZIP_HINT: &str = "install unzip (Linux: `apt install unzip`, macOS: `brew install unzip`)";
+const TAR_HINT: &str = "install tar (Windows 10+ ships tar.exe; Linux distributions preinstall it)";
+
+/// Per-platform handler for `.zip` archives.
+///
+/// Windows has no `unzip`, but its bundled bsdtar (`tar.exe`) reads zip
+/// archives as well as tarballs; Unix systems keep Info-ZIP `unzip`, whose
+/// GNU tar cannot read zip files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ZipTool {
+    /// Info-ZIP `unzip`: `-Z1` lists, `-o -q <archive> -d <dest>` extracts.
+    Unzip,
+    /// bsdtar: `-tf` lists, `-xf <archive> -C <dest>` extracts.
+    Tar,
+}
+
+impl ZipTool {
+    /// The handler for the current platform.
+    pub(crate) fn select() -> Self {
+        if cfg!(windows) {
+            Self::Tar
+        } else {
+            Self::Unzip
+        }
+    }
+
+    pub(crate) fn command(&self) -> &'static str {
+        match self {
+            Self::Unzip => "unzip",
+            Self::Tar => "tar",
+        }
+    }
+
+    fn hint(&self) -> &'static str {
+        match self {
+            Self::Unzip => UNZIP_HINT,
+            Self::Tar => TAR_HINT,
+        }
+    }
+
+    pub(crate) fn list_args<'a>(&self, archive: &'a str) -> Vec<&'a str> {
+        match self {
+            Self::Unzip => vec!["-Z1", archive],
+            Self::Tar => vec!["-tf", archive],
+        }
+    }
+
+    pub(crate) fn extract_args<'a>(&self, archive: &'a str, dest: &'a str) -> Vec<&'a str> {
+        match self {
+            Self::Unzip => vec!["-o", "-q", archive, "-d", dest],
+            Self::Tar => vec!["-xf", archive, "-C", dest],
+        }
+    }
+}
 
 /// Extract an archive into `dest`, refusing entries that escape the
 /// directory (zip-slip / tar-slip) before any bytes hit disk.
@@ -179,12 +231,13 @@ pub(crate) fn extract(archive: &Path, dest: &Path) -> Result<(), FetchError> {
     let archive_str = archive.to_string_lossy().into_owned();
     let dest_str = dest.to_string_lossy().into_owned();
     if name.ends_with(".zip") {
-        let listing = run_capture("unzip", &["-Z1", &archive_str], UNZIP_HINT)?;
+        let tool = ZipTool::select();
+        let listing = run_capture(tool.command(), &tool.list_args(&archive_str), tool.hint())?;
         validate_entries(&name, listing)?;
         run_status(
-            "unzip",
-            &["-o", "-q", &archive_str, "-d", &dest_str],
-            UNZIP_HINT,
+            tool.command(),
+            &tool.extract_args(&archive_str, &dest_str),
+            tool.hint(),
         )
     } else if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
         let listing = run_capture("tar", &["-tzf", &archive_str], TAR_HINT)?;

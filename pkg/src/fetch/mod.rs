@@ -7,9 +7,11 @@
 //!
 //! # Windows note
 //!
-//! `curl.exe` and `tar.exe` ship with Windows 10+; `unzip` does not — use Git
-//! Bash or install Info-ZIP `unzip`. The CLI reports a clear
-//! [`FetchError::CommandUnavailable`] hint when a command is missing.
+//! `curl.exe` and `tar.exe` ship with Windows 10+; `unzip` does not — zip
+//! archives are therefore extracted with the bundled bsdtar on Windows
+//! ([`package::ZipTool`]), while Unix keeps Info-ZIP `unzip`. The CLI
+//! reports a clear [`FetchError::CommandUnavailable`] hint when a command
+//! is missing.
 //!
 //! # Cache layout
 //!
@@ -41,6 +43,21 @@ pub use package::{fetch_package, PackageArchive};
 /// artifact. The CLI's `--index-url` overrides it (per user-hosted indexes).
 pub const DEFAULT_INDEX_URL: &str =
     "https://github.com/<user>/mpv-packages-index/releases/latest/download/index.json";
+
+/// Reject an index URL that still carries the `<user>` placeholder before it
+/// reaches the network — a 404 from `https://github.com/<user>/...` says
+/// nothing to the user.
+///
+/// # Errors
+///
+/// [`FetchError::IndexUnconfigured`] when `url` contains the placeholder.
+pub fn ensure_index_url(url: &str) -> Result<(), FetchError> {
+    if url.contains("<user>") {
+        Err(FetchError::IndexUnconfigured)
+    } else {
+        Ok(())
+    }
+}
 
 /// HTTP abstraction over fetching a URL. Real traffic goes through
 /// [`HttpFetcher`] (a `curl` subprocess); tests use [`MockFetcher`].

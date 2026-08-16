@@ -10,6 +10,10 @@ use pkg::upgrade::{self, UpdateInfo};
 /// Run `mpv-config check-update`: compare local `VERSION` with the remote
 /// index and print the outcome. Exit code 1 when the check failed.
 pub fn run_check_update(index_url: &str) -> i32 {
+    if let Err(error) = pkg::fetch::ensure_index_url(index_url) {
+        eprintln!("检查更新失败:{error}");
+        return 1;
+    }
     let root = crate::doctor::check_root();
     let info = upgrade::check_update(&HttpFetcher, index_url, &root);
     print_update_info(&mut std::io::stdout(), &info);
@@ -25,6 +29,10 @@ pub fn run_check_update(index_url: &str) -> i32 {
 pub fn run_upgrade(index_url: &str, yes: bool) -> i32 {
     if !yes {
         eprintln!("错误:升级会替换 app 层文件(保留 user/ 层)。请确认后加 --yes 执行。");
+        return 1;
+    }
+    if let Err(error) = pkg::fetch::ensure_index_url(index_url) {
+        eprintln!("错误:无法升级:{error}");
         return 1;
     }
     let root = crate::doctor::check_root();

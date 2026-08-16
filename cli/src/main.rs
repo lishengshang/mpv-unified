@@ -286,6 +286,10 @@ fn run_update(args: UpdateArgs) -> i32 {
 }
 
 fn run_update_index(args: UpdateIndexArgs) -> i32 {
+    if let Err(error) = pkg::fetch::ensure_index_url(&args.index_url) {
+        eprintln!("错误: {error}");
+        return 1;
+    }
     let (_, cache) = match pkg_roots() {
         Ok(roots) => roots,
         Err(error) => {

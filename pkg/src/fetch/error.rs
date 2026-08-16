@@ -52,6 +52,10 @@ pub enum FetchError {
     NameMismatch { expected: String, actual: String },
     /// Neither `$MPV_CONFIG_CACHE`, `$HOME`, nor `$USERPROFILE` resolved.
     NoCacheDir,
+    /// The index URL is still the built-in placeholder default (no official
+    /// index repository is published yet); a 404 from it would explain
+    /// nothing, so the guard rejects it before any network traffic.
+    IndexUnconfigured,
     /// Filesystem failure while writing/renaming cache artifacts.
     Io { context: String, source: io::Error },
 }
@@ -113,6 +117,10 @@ impl fmt::Display for FetchError {
             Self::NoCacheDir => write!(
                 f,
                 "cannot resolve a cache directory: set MPV_CONFIG_CACHE or HOME"
+            ),
+            Self::IndexUnconfigured => write!(
+                f,
+                "默认索引未配置(仍为占位地址):请通过 --index-url 指定可用的包索引地址"
             ),
             Self::Io { context, source } => write!(f, "{context}: {source}"),
         }

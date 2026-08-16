@@ -84,6 +84,22 @@ pub fn run(options: &GenOptions) -> Result<GenReport, GenError> {
     run_at_root(&repo_root(), options)
 }
 
+/// Regenerate `portable_config/` under `root` for the host platform.
+///
+/// Runs after an app-layer upgrade (CLI `upgrade` and the GUI): the shipped
+/// `portable_config/` is pre-generated without the user layer, so it must be
+/// re-merged with the preserved `user/` files to become active.
+pub fn regenerate_portable_config(root: &Path) -> Result<GenReport, GenError> {
+    run_at_root(
+        root,
+        &GenOptions {
+            platform: None,
+            out: root.join("portable_config"),
+            dry_run: false,
+        },
+    )
+}
+
 /// Resolve the application root holding `config/`, `user/` and the assets.
 ///
 /// Runtime locations are probed first — the directory of the running
@@ -217,7 +233,7 @@ pub fn run_at_root(root: &Path, options: &GenOptions) -> Result<GenReport, GenEr
     // uosc 补丁在其上追加,保持 T23 语义(生成的 uosc.conf 含方案菜单补丁)。
     let asset_dirs = assets::copy_assets(root, options)?;
     // uosc 菜单补丁(任务 23):启用方案 ≥1 时,若检测到 uosc,生成
-    // dist/script-opts/uosc.conf 补丁并把菜单项追加到 input.conf。
+    // portable_config/script-opts/uosc.conf 补丁并把菜单项追加到 input.conf。
     let mut uosc_menu_lines: Option<String> = None;
     if let Some((profiles, enabled_ids)) = profile_blocks(root, &mut warnings)? {
         if !enabled_ids.is_empty() {
@@ -359,7 +375,7 @@ fn profile_blocks(
 }
 
 /// Emit the uosc menu patch when uosc is installed: writes
-/// `dist/script-opts/uosc.conf` (the repository's own `uosc.conf`, when
+/// `portable_config/script-opts/uosc.conf` (the repository's own `uosc.conf`, when
 /// present, with the patch appended — never clobbered) and returns the
 /// operative menu lines for `input.conf`. When uosc is absent, warns and
 /// returns `None` — the integration degrades gracefully, never errors.
@@ -511,5 +527,23 @@ mod tests {
     fn find_config_root_without_marker_returns_none() {
         let scratch = ScratchDir::new("no-marker");
         assert_eq!(find_config_root(scratch.0.as_path()), None);
+    }
+
+    #[test]
+    fn regenerate_portable_config_writes_into_root_portable_config() {
+        let scratch = ScratchDir::new("regen");
+        make_config_source(scratch.0.as_path());
+        for layer in ["windows.conf", "linux.conf", "macos.conf"] {
+            fs::write(scratch.0.join("config").join(layer), "# layer\n").expect("写入平台层");
+        }
+        let report = regenerate_portable_config(scratch.0.as_path()).expect("regenerate");
+        assert!(scratch.0.join("portable_config").join("mpv.conf").is_file());
+        assert!(
+            report
+                .files
+                .iter()
+                .any(|file| file.path.ends_with("mpv.conf")),
+            "{report:?}"
+        );
     }
 }

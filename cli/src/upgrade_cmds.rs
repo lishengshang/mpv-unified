@@ -45,6 +45,23 @@ pub fn run_upgrade(index_url: &str, yes: bool) -> i32 {
     };
     let result = upgrade::perform_upgrade(&HttpFetcher, index_url, &cache, &root);
     println!("{}", result.message);
+    // 升级成功后立刻重新生成 portable_config/(新版预生成内容不含 user 层)
+    if result.applied_version.is_some() {
+        match crate::gen::regenerate_portable_config(&root) {
+            Ok(report) => {
+                println!(
+                    "已重新生成 portable_config/(合并 user 层):{} 个输出文件",
+                    report.files.len()
+                );
+                for warning in &report.warnings {
+                    eprintln!("警告:{warning}");
+                }
+            }
+            Err(error) => {
+                eprintln!("警告:升级后重新生成配置失败:{error};请手动运行 `mpv-config gen`");
+            }
+        }
+    }
     if result.applied_version.is_none() && result.message.contains("失败") {
         1
     } else {

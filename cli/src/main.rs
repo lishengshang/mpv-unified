@@ -144,8 +144,8 @@ struct GenArgs {
     #[arg(long, value_enum)]
     platform: Option<PlatformArg>,
 
-    /// 输出目录,自动创建(缺省 ./dist)
-    #[arg(long, default_value = "dist")]
+    /// 输出目录,自动创建(缺省 ./portable_config,mpv 便携模式直接识别)
+    #[arg(long, default_value = "portable_config")]
     out: PathBuf,
 
     /// 只打印将生成的文件清单与行数,不写盘
@@ -528,7 +528,7 @@ mod tests {
         };
         assert_eq!(args.platform, Some(PlatformArg::Windows));
         assert!(args.dry_run);
-        assert_eq!(args.out, PathBuf::from("dist"));
+        assert_eq!(args.out, PathBuf::from("portable_config"));
     }
 
     #[test]

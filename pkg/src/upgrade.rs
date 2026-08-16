@@ -55,7 +55,7 @@ pub struct UpgradeResult {
 
 /// Top-level entries excluded from the app-layer backup: user data, VCS,
 /// planning artifacts, and regenerable build output.
-const BACKUP_EXCLUDE: &[&str] = &["user", ".git", ".omo", "target", "dist"];
+const BACKUP_EXCLUDE: &[&str] = &["user", ".git", ".omo", "target", "dist", "portable_config"];
 
 /// Entries never copied from a downloaded zip into the repository root:
 /// the user layer is sacred and survives every upgrade.
@@ -84,6 +84,8 @@ fn read_version(root: &Path) -> Result<String, String> {
 
 /// Fetch and parse the remote index; every failure is a readable message.
 fn fetch_remote_meta(fetcher: &dyn Fetcher, index_url: &str) -> Result<RemoteMeta, String> {
+    crate::fetch::ensure_index_url(index_url)
+        .map_err(|error| format!("获取远程索引失败:{error}"))?;
     let index = fetch_index(fetcher, index_url)
         .map_err(|error| format!("获取远程索引失败:{error}"))
         .and_then(|text| Index::parse(&text).map_err(|error| format!("索引校验失败:{error}")))?;
@@ -285,7 +287,7 @@ pub fn perform_upgrade(
             result.applied_version = Some(meta.latest.clone());
             result.files_replaced = replaced;
             result.message = format!(
-                "升级成功:{local} → {},共替换 {replaced} 个文件;升级后请重新运行 `mpv-config gen` 重新生成配置",
+                "升级成功:{local} → {},共替换 {replaced} 个文件(user 层已保留)",
                 meta.latest
             );
         }
